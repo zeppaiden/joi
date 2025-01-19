@@ -1,0 +1,194 @@
+# Project Development Rules
+
+## File Structure and Organization
+- Place page components in `app/(routes)` 
+- Keep shared components in `components/[domain]`
+- Store types in `types/[domain].ts`
+- Place Supabase queries in `lib/supabase/[domain].ts`
+- Keep Zod schemas in `schemas/[domain].ts`
+- Place hooks in `hooks/[domain].ts`
+- Store utils in `utils/[domain].ts`
+- Keep Langchain logic in `lib/langchain/[domain].ts`
+- Place API handlers in `app/api/[domain]/route.ts`
+- Store Cypress tests in `cypress/e2e/[domain]`
+
+## Component Rules
+- Use Server Components by default
+- Split component logic between SSR and CSR:
+  - Keep data fetching, heavy computations in SSR
+  - Move only necessary interactivity to CSR
+  - Create separate SSR wrapper components where beneficial
+- Add 'use client' only when necessary for:
+  - Interactivity (useState, useEffect)
+  - Browser APIs
+  - Event handlers
+  - Real-time updates
+- Keep components under 250 lines
+- Split complex components into subcomponents
+- Use proper TypeScript types for all props
+- Implement error boundaries for data fetching
+- Use Suspense boundaries strategically
+- Follow this component structure:
+  ```typescript
+  // Types
+  // Imports
+  // Constants
+  // Helper functions
+  // Component
+  // Exports
+  ```
+
+## Data Fetching
+- Use Supabase for all database operations
+- Implement query caching where appropriate
+- Use real-time subscriptions sparingly
+- Batch related queries using Promise.all
+- Handle errors comprehensively
+- Validate responses with Zod
+- Implement proper loading states
+
+## State Management
+- Use URL state for shareable data
+- Implement form state with react-hook-form
+- Use useState for simple local state
+- Leverage useContext for shared state
+- Implement proper loading states
+- Handle errors gracefully
+
+## Type Safety
+- Use TypeScript for all files
+- Use Supabase CLI generated types for database queries
+- Implement Zod validation for:
+  - Form inputs
+  - API responses
+  - External service responses
+- Define shared types in types directory
+- Use proper type inference
+- Avoid any type
+- Keep database types up to date using Supabase CLI
+
+## Testing
+- Write Cypress tests for critical paths
+- Test error states and edge cases
+- Implement proper test isolation
+- Use test data factories
+- Mock external services
+- Follow AAA pattern (Arrange, Act, Assert)
+
+## Performance
+- Data Fetching Strategy:
+  - Use getStaticProps + ISR for infrequently changing data
+  - Combine with useSWR for client-side updates
+  - Use getServerSideProps only for personalized, dynamic data
+  - Implement parallel data fetching with Promise.all
+  
+- Caching and Revalidation:
+  - Use ISR with appropriate revalidation intervals
+  - Implement SWR for client-side caching
+  - Combine static props with real-time updates
+  - Use proper fallback mechanisms
+  - Handle stale data with optimistic updates
+  - Cache auth/session data in cookies
+  
+- Real-time Updates:
+  - Use Supabase Realtime efficiently
+  - Implement proper debouncing
+  - Optimize subscription management
+  - Use React.memo for expensive components
+  
+- Component Optimization:
+  - Implement strategic Suspense boundaries
+  - Use streaming for progressive loading
+  - Create proper loading hierarchies
+  - Maintain layout stability
+  
+- General Optimization:
+  - Minimize client-side JavaScript
+  - Use static generation where possible
+  - Optimize images with next/image
+  - Keep bundle size small
+  - Use virtualization for long lists
+
+## Security
+- Validate all inputs
+- Sanitize user-generated content
+- Implement proper authentication
+- Use proper CORS headers
+- Keep secrets in environment variables
+
+## Error Handling
+- Implement proper error boundaries
+- Log errors appropriately
+- Show user-friendly error messages
+- Handle network errors gracefully
+- Implement proper fallbacks
+
+## UI/UX Standards
+- Use Shadcn UI components consistently
+- Implement responsive design
+- Follow accessibility guidelines
+- Use Lucide icons
+- Maintain consistent spacing
+- Use proper color contrast
+
+## Supabase Integration
+- Use connection pooling
+- Implement proper error handling
+- Optimize queries for performance
+- Use appropriate indexes
+- Handle real-time subscriptions efficiently
+
+## LLM Integration
+- Implement proper error handling
+- Cache responses when appropriate
+- Validate inputs and outputs
+- Handle rate limiting
+- Implement fallbacks
+
+## Build and Deploy
+- Keep builds under free tier limits
+- Optimize for build time
+- Minimize API routes
+- Use proper caching strategies
+- Implement proper environment variables
+
+## Code Style
+- Use ESLint and Prettier
+- Follow naming conventions:
+  - PascalCase for components
+  - camelCase for functions
+  - kebab-case for files
+- Write self-documenting code
+- Add comments to explain:
+  - Complex business logic
+  - Performance optimization choices
+  - Future maintenance considerations
+  - Non-obvious technical decisions
+- Use early returns
+- Implement proper error handling
+
+## DO NOT
+- Use Edge Functions
+- Implement complex logic in API routes
+- Use any type
+- Skip error handling
+- Leave console.logs in production
+- Skip type validation
+- Implement complex state management
+- Use class components
+- Skip accessibility
+- Leave TODOs without tickets
+
+## Git Standards
+- Write meaningful commit messages
+- Keep PRs focused and small
+- Include proper documentation
+- Add tests for new features
+- Update relevant documentation
+
+## Documentation
+- Document complex functions
+- Update README when needed
+- Document environment variables
+- Include setup instructions
+- Document deployment process
