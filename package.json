@@ -2,10 +2,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "tsc && next build",
     "start": "next start",
     "cypress": "cypress open",
-    "cypress:run": "cypress run"
+    "cypress:run": "cypress run",
+    "lint": "eslint . --ext .ts,.tsx",
+    "lint:fix": "eslint . --ext .ts,.tsx --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "check-format": "prettier --check \"**/*.{ts,tsx,json,md}\""
+
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.1.1",
@@ -23,17 +28,23 @@
     "lucide-react": "^0.468.0",
     "next": "latest",
     "next-themes": "^0.4.3",
-    "prettier": "^3.3.3",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "swr": "^2.3.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "22.10.2",
     "@types/react": "^19.0.2",
     "@types/react-dom": "19.0.2",
+    "@typescript-eslint/eslint-plugin": "^8.20.0",
     "cypress": "^14.0.0",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^15.1.5",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-deprecation": "^3.0.0",
     "postcss": "8.4.49",
+    "prettier": "^3.4.2",
     "supabase": "^2.6.8",
     "tailwind-merge": "^2.5.2",
     "tailwindcss": "3.4.17",

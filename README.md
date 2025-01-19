@@ -1,21 +1,26 @@
 # Joi
 
-Joi is a customer relationship management tool for AI-driven workflows. 
+Joi is a customer relationship management tool for AI-driven workflows.
 
 ## Getting Started
 
 1. **Create Supabase Project**
+
    - Create a new project at [database.new](https://database.new)
 
 2. **Environment Setup**
+
    - Create `.env.local` file in the root directory:
+
    ```bash
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    ```
+
    Both values can be found in your [Supabase project's API settings](https://app.supabase.com/project/_/settings/api)
 
 3. **Install Dependencies**
+
    ```bash
    npm install
    ```

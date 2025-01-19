@@ -123,6 +123,30 @@
 - Handle network errors gracefully
 - Implement proper fallbacks
 
+## Logging Standards
+- Use the custom logger from `lib/logger` for all logging
+- Follow logging levels appropriately:
+  - `debug`: Development-only debugging information
+  - `info`: Important application events and milestones
+  - `warn`: Non-critical issues that need attention
+  - `error`: Critical issues that affect functionality
+- Log strategically:
+  - API requests and responses
+  - Critical business operations
+  - Authentication events
+  - Performance issues
+  - Error conditions
+- Include relevant context with logs
+- Never log sensitive information:
+  - Passwords
+  - API keys
+  - Personal user data
+  - Authentication tokens
+- Server-side logs persist in production
+- Client-side logs only show in development
+- Use early returns with error logging
+- Log errors before throwing them
+
 ## UI/UX Standards
 - Use Shadcn UI components consistently
 - Implement responsive design
@@ -178,6 +202,10 @@
 - Use class components
 - Skip accessibility
 - Leave TODOs without tickets
+- Make changes without first:
+  - Reviewing relevant directory documentation
+  - Updating documentation to reflect new changes
+  - Following patterns established in documentation
 
 ## Git Standards
 - Write meaningful commit messages
@@ -185,6 +213,23 @@
 - Include proper documentation
 - Add tests for new features
 - Update relevant documentation
+
+## Directory Documentation
+- Include a README.md file in these logic-containing directories and their subdirectories:
+  - `lib/supabase/**` - Database queries and data access patterns
+  - `lib/langchain/**` - LLM integration and chain configurations
+  - `utils/**` - Utility functions and their use cases
+  - `schemas/**` - Zod validation schemas and their purposes
+  - `types/**` - Shared TypeScript types and interfaces
+  - `hooks/**` - Custom React hooks and their usage
+  - `app/api/**` - API route handlers and endpoints
+
+- Each README.md should explain:
+  - Purpose and scope of the directory
+  - Key modules and their responsibilities
+  - Important patterns or conventions
+  - Dependencies and relationships with other directories
+  - Examples of proper usage where helpful
 
 ## Documentation
 - Document complex functions
