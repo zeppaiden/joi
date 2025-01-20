@@ -148,7 +148,7 @@
 - Log errors before throwing them
 
 ## UI/UX Standards
-- Use Shadcn UI components consistently
+- Use Shadcn UI components consistently (command is `npx shadcn@latest add <component-name>`)
 - Implement responsive design
 - Follow accessibility guidelines
 - Use Lucide icons
@@ -192,6 +192,7 @@
 - Implement proper error handling
 
 ## DO NOT
+- Create new components if a shadcn component already exists
 - Use Edge Functions
 - Implement complex logic in API routes
 - Use any type
