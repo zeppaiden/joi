@@ -1,8 +1,8 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import { Navigation } from "@/components/navigation/Navigation";
-import { Header } from "@/components/navigation/Header";
-import { ChatWidget } from "@/components/chat/ChatWidget";
+import { Navigation } from "@/components/navigation/navigation";
+import { Header } from "@/components/navigation/header";
+import { ChatWidget } from "@/components/chat/chat-widget";
 import { Suspense } from "react";
 
 export default async function ProtectedLayout({

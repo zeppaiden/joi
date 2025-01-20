@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import { TicketStats } from "@/components/tickets/TicketStats";
-import { TicketDashboard } from "@/components/tickets/TicketDashboard";
+import { TicketStats } from "@/components/tickets/ticket-stats";
+import { TicketDashboard } from "@/components/tickets/ticket-dashboard";
 import { unstable_cache } from "next/cache";
 
 // Cache ticket data
