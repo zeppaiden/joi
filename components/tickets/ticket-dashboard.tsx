@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import React, { useState, memo } from 'react';
-import { AlertCircle, AlertTriangle, CheckCircle } from 'lucide-react';
-import { useVirtualizer } from '@tanstack/react-virtual';
-import { useSearchParams } from 'next/navigation';
+import React, { useState, memo } from "react";
+import { AlertCircle, AlertTriangle, CheckCircle } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useSearchParams } from "next/navigation";
 
 type Priority = "High" | "Medium" | "Low";
 type Ticket = {
@@ -23,12 +23,12 @@ type PriorityFilter = {
 };
 
 const TicketRow = memo(({ ticket }: { ticket: Ticket }) => (
-  <div className="px-6 py-4 hover:bg-gray-50">
+  <div className="px-6 py-4 hover:opacity-90">
     <div className="flex items-center justify-between">
       <div className="flex items-center space-x-4">
         <div className="flex-shrink-0">
-          <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-            <span className="text-sm font-medium text-gray-600">
+          <div className="h-10 w-10 rounded-full flex items-center justify-center border">
+            <span className="text-sm font-medium">
               {ticket.customer
                 .split(" ")
                 .map((n) => n[0])
@@ -37,52 +37,44 @@ const TicketRow = memo(({ ticket }: { ticket: Ticket }) => (
           </div>
         </div>
         <div>
-          <h3 className="text-sm font-medium">
-            {ticket.subject}
-          </h3>
-          <p className="text-sm text-gray-500">
+          <h3 className="text-sm font-medium">{ticket.subject}</h3>
+          <p className="text-sm opacity-70">
             {ticket.customer} • {ticket.time}
           </p>
         </div>
       </div>
-      <span
-        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-        ${ticket.status === "High" ? "bg-red-100 text-red-800" : ticket.status === "Medium" ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}`}
-      >
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border">
         {ticket.status}
       </span>
     </div>
   </div>
 ));
 
-TicketRow.displayName = 'TicketRow';
+TicketRow.displayName = "TicketRow";
 
 export function TicketDashboard({ tickets }: TicketDashboardProps) {
   const searchParams = useSearchParams();
-  const searchQuery = searchParams.get('q')?.toLowerCase() || '';
-  
+  const searchQuery = searchParams.get("q")?.toLowerCase() || "";
+
   const [priorityFilters, setPriorityFilters] = useState<PriorityFilter>({
     high: true,
     medium: true,
     low: true,
   });
 
-  const filteredTickets = tickets.filter(
-    (ticket) => {
-      const matchesPriority = (
-        (ticket.status === "High" && priorityFilters.high) ||
-        (ticket.status === "Medium" && priorityFilters.medium) ||
-        (ticket.status === "Low" && priorityFilters.low)
-      );
+  const filteredTickets = tickets.filter((ticket) => {
+    const matchesPriority =
+      (ticket.status === "High" && priorityFilters.high) ||
+      (ticket.status === "Medium" && priorityFilters.medium) ||
+      (ticket.status === "Low" && priorityFilters.low);
 
-      const matchesSearch = searchQuery ? (
-        ticket.subject.toLowerCase().includes(searchQuery) ||
+    const matchesSearch = searchQuery
+      ? ticket.subject.toLowerCase().includes(searchQuery) ||
         ticket.customer.toLowerCase().includes(searchQuery)
-      ) : true;
+      : true;
 
-      return matchesPriority && matchesSearch;
-    }
-  );
+    return matchesPriority && matchesSearch;
+  });
 
   const parentRef = React.useRef<HTMLDivElement>(null);
 
@@ -96,31 +88,27 @@ export function TicketDashboard({ tickets }: TicketDashboardProps) {
   const togglePriority = (priority: Priority) => {
     setPriorityFilters((prev) => ({
       ...prev,
-      [priority.toLowerCase() as Lowercase<Priority>]: !prev[priority.toLowerCase() as Lowercase<Priority>],
+      [priority.toLowerCase() as Lowercase<Priority>]:
+        !prev[priority.toLowerCase() as Lowercase<Priority>],
     }));
   };
 
   const getPriorityButtonStyle = (priority: Priority) => {
     const baseStyle =
       "flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors";
-    const activeStyle = {
-      High: "bg-red-100 text-red-800",
-      Medium: "bg-yellow-100 text-yellow-800",
-      Low: "bg-green-100 text-green-800",
-    };
-    const inactiveStyle = {
-      High: "bg-gray-100 text-gray-500",
-      Medium: "bg-gray-100 text-gray-500",
-      Low: "bg-gray-100 text-gray-500",
-    };
-    return `${baseStyle} ${priorityFilters[priority.toLowerCase() as Lowercase<Priority>] ? activeStyle[priority] : inactiveStyle[priority]}`;
+    const activeStyle = priorityFilters[
+      priority.toLowerCase() as Lowercase<Priority>
+    ]
+      ? "bg-secondary"
+      : "bg-muted text-muted-foreground";
+    return `${baseStyle} ${activeStyle}`;
   };
 
   return (
     <>
       <div className="mb-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium text-gray-900">Tickets</h2>
+          <h2 className="text-lg font-medium">Tickets</h2>
           <div className="flex space-x-2">
             <button
               onClick={() => togglePriority("High")}
@@ -147,29 +135,26 @@ export function TicketDashboard({ tickets }: TicketDashboardProps) {
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200">
+      <div className="bg-background rounded-lg border">
+        <div className="px-6 py-4 border-b">
           <h2 className="text-lg font-medium">Recent Tickets</h2>
         </div>
-        <div 
-          ref={parentRef}
-          className="divide-y divide-gray-200 max-h-[600px] overflow-auto"
-        >
+        <div ref={parentRef} className="divide-y max-h-[600px] overflow-auto">
           <div
             style={{
               height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
+              width: "100%",
+              position: "relative",
             }}
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => (
               <div
                 key={filteredTickets[virtualRow.index].id}
                 style={{
-                  position: 'absolute',
+                  position: "absolute",
                   top: 0,
                   left: 0,
-                  width: '100%',
+                  width: "100%",
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
@@ -181,4 +166,4 @@ export function TicketDashboard({ tickets }: TicketDashboardProps) {
       </div>
     </>
   );
-} 
+}

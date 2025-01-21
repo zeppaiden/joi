@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { List, Send } from "lucide-react";
 
@@ -20,15 +20,12 @@ export function ChatInput({
   onToggleQuickResponses,
 }: ChatInputProps) {
   return (
-    <form
-      onSubmit={onSubmit}
-      className="p-4 border-t border-gray-200"
-    >
+    <form onSubmit={onSubmit} className="p-4 border-t">
       <div className="flex space-x-2">
         <button
           type="button"
           onClick={onToggleQuickResponses}
-          className={`p-2 rounded-lg transition-colors ${showQuickResponses ? "bg-blue-100 text-blue-600" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"}`}
+          className={`p-2 rounded-lg transition-colors ${showQuickResponses ? "bg-secondary" : "hover:bg-muted"}`}
         >
           <List className="w-5 h-5" />
         </button>
@@ -37,16 +34,16 @@ export function ChatInput({
           value={inputMessage}
           onChange={onInputChange}
           placeholder="Type your message..."
-          className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2"
         />
         <button
           type="submit"
           disabled={!inputMessage.trim() || isLoading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           <Send className="w-5 h-5" />
         </button>
       </div>
     </form>
   );
-} 
+}

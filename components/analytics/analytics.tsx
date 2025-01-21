@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 export function Analytics() {
   return (
@@ -7,4 +7,4 @@ export function Analytics() {
       <p className="text-gray-600">Analytics features coming soon...</p>
     </div>
   );
-} 
+}

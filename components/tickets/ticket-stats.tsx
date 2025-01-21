@@ -1,5 +1,5 @@
-import React from 'react';
-import { unstable_cache } from 'next/cache';
+import React from "react";
+import { unstable_cache } from "next/cache";
 
 // Cache ticket stats
 const getTicketStats = unstable_cache(
@@ -12,8 +12,8 @@ const getTicketStats = unstable_cache(
       { title: "Total Tickets", count: 48, change: "-3%" },
     ];
   },
-  ['ticket-stats'],
-  { revalidate: 60 } // Revalidate every minute
+  ["ticket-stats"],
+  { revalidate: 60 }, // Revalidate every minute
 );
 
 export async function TicketStats() {
@@ -22,21 +22,16 @@ export async function TicketStats() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
       {stats.map((stat) => (
-        <div
-          key={stat.title}
-          className="bg-white p-6 rounded-lg border border-gray-200"
-        >
-          <h3 className="text-sm font-medium text-gray-500">
+        <div key={stat.title} className="bg-background p-6 rounded-lg border">
+          <h3 className="text-sm font-medium text-muted-foreground">
             {stat.title}
           </h3>
-          <p className="text-2xl font-semibold mt-2">
-            {stat.count}
-          </p>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-2xl font-semibold mt-2">{stat.count}</p>
+          <p className="text-sm text-muted-foreground mt-1">
             {stat.change} from last week
           </p>
         </div>
       ))}
     </div>
   );
-} 
+}

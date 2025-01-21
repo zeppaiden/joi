@@ -10,4 +10,4 @@ export interface QuickResponse {
   category: string;
   title: string;
   content: string;
-} 
+}

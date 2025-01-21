@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
 import React, { useCallback } from "react";
 import { MessageSquare, X, Bot } from "lucide-react";
-import { useDebouncedCallback } from 'use-debounce';
+import { useDebouncedCallback } from "use-debounce";
 import { Message, QuickResponse } from "./types";
 import { MessageBubble } from "./message-bubble";
 import { QuickResponsesPanel } from "./quick-responses-panel";
@@ -51,7 +51,7 @@ const quickResponses: QuickResponse[] = [
   },
 ];
 
-const categories = Array.from(new Set(quickResponses.map(r => r.category)));
+const categories = Array.from(new Set(quickResponses.map((r) => r.category)));
 
 export function ChatWidget() {
   const [isOpen, setIsOpen] = React.useState(false);
@@ -66,7 +66,9 @@ export function ChatWidget() {
   const [inputMessage, setInputMessage] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
   const [showQuickResponses, setShowQuickResponses] = React.useState(false);
-  const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = React.useState<string | null>(
+    null,
+  );
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
   const handleQuickResponse = useCallback((response: QuickResponse) => {
@@ -75,16 +77,15 @@ export function ChatWidget() {
     setSelectedCategory(null);
   }, []);
 
-  const debouncedScroll = useDebouncedCallback(
-    () => {
-      messagesEndRef.current?.scrollIntoView({
-        behavior: "smooth",
-      });
-    },
-    100
-  );
+  const debouncedScroll = useDebouncedCallback(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
+  }, 100);
 
-  const memoizedDebouncedScroll = useCallback(debouncedScroll, [debouncedScroll]);
+  const memoizedDebouncedScroll = useCallback(debouncedScroll, [
+    debouncedScroll,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,15 +122,17 @@ export function ChatWidget() {
   return (
     <div className="fixed bottom-4 right-4 z-50">
       {isOpen ? (
-        <div className="bg-white rounded-lg shadow-xl w-96 flex flex-col border border-gray-200 transition-all duration-300 ease-in-out">
-          <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-blue-600 rounded-t-lg">
+        <div className="bg-background rounded-lg shadow-xl w-96 flex flex-col border transition-all duration-300 ease-in-out">
+          <div className="p-4 border-b flex justify-between items-center bg-primary rounded-t-lg">
             <div className="flex items-center space-x-2">
-              <Bot className="w-6 h-6 text-white" />
-              <span className="text-white font-medium">Support Assistant</span>
+              <Bot className="w-6 h-6 text-primary-foreground" />
+              <span className="text-primary-foreground font-medium">
+                Support Assistant
+              </span>
             </div>
             <button
               onClick={() => setIsOpen(false)}
-              className="text-white hover:text-gray-200 transition-colors"
+              className="text-primary-foreground hover:text-primary-foreground/90 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -139,12 +142,12 @@ export function ChatWidget() {
               <MessageBubble key={message.id} message={message} />
             ))}
             {isLoading && (
-              <div className="flex items-center space-x-2 text-gray-500">
-                <Bot className="w-8 h-8 p-1.5 bg-gray-100 rounded-full" />
+              <div className="flex items-center space-x-2 text-muted-foreground">
+                <Bot className="w-8 h-8 p-1.5 bg-muted rounded-full" />
                 <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100" />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200" />
+                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" />
+                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce delay-100" />
+                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce delay-200" />
                 </div>
               </div>
             )}
@@ -166,17 +169,19 @@ export function ChatWidget() {
             showQuickResponses={showQuickResponses}
             onSubmit={handleSubmit}
             onInputChange={(e) => setInputMessage(e.target.value)}
-            onToggleQuickResponses={() => setShowQuickResponses(!showQuickResponses)}
+            onToggleQuickResponses={() =>
+              setShowQuickResponses(!showQuickResponses)
+            }
           />
         </div>
       ) : (
         <button
           onClick={() => setIsOpen(true)}
-          className="bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 transition-colors"
+          className="bg-primary text-primary-foreground p-3 rounded-full shadow-lg hover:bg-primary/90 transition-colors"
         >
           <MessageSquare className="w-6 h-6" />
         </button>
       )}
     </div>
   );
-} 
+}

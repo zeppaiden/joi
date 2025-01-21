@@ -50,6 +50,6 @@ const quickResponsesData: QuickResponse[] = [
 
 export async function getQuickResponses(): Promise<QuickResponse[]> {
   // Simulate network delay to demonstrate loading state
-  await new Promise(resolve => setTimeout(resolve, 100));
+  await new Promise((resolve) => setTimeout(resolve, 100));
   return quickResponsesData;
-} 
+}

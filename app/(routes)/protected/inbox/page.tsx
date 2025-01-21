@@ -39,7 +39,7 @@ const getTickets = unstable_cache(
     ];
   },
   ["tickets"],
-  { revalidate: 60 } // Revalidate every minute
+  { revalidate: 60 }, // Revalidate every minute
 );
 
 export default async function InboxPage() {
@@ -58,4 +58,4 @@ export default async function InboxPage() {
       </Suspense>
     </>
   );
-} 
+}

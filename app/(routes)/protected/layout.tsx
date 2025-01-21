@@ -21,7 +21,7 @@ export default async function ProtectedLayout({
   }
 
   return (
-    <div className="flex w-full min-h-screen bg-gray-50">
+    <div className="flex w-full min-h-screen">
       {/* Navigation Sidebar */}
       <Navigation />
 
@@ -43,4 +43,4 @@ export default async function ProtectedLayout({
       </Suspense>
     </div>
   );
-} 
+}
