@@ -1,61 +1,50 @@
+"use client";
+
 import { Suspense } from "react";
+import { ErrorBoundary } from "react-error-boundary";
 import { TicketStats } from "@/components/tickets/ticket-stats";
 import { TicketDashboard } from "@/components/tickets/ticket-dashboard";
-import { unstable_cache } from "next/cache";
+import { AdminTicketManagement } from "@/components/tickets/admin-ticket-management";
+import { RoleGate } from "@/components/auth/role-gate";
+import { LoadingState } from "@/components/ui/loading-state";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
-// Cache ticket data
-const getTickets = unstable_cache(
-  async () => {
-    // Replace with actual data fetching
-    return [
-      {
-        id: "1234",
-        subject: "Cannot access my account",
-        status: "High" as const,
-        customer: "Sarah Johnson",
-        time: "10 mins ago",
-      },
-      {
-        id: "1235",
-        subject: "Payment failed multiple times",
-        status: "Medium" as const,
-        customer: "Mike Peters",
-        time: "25 mins ago",
-      },
-      {
-        id: "1236",
-        subject: "Need help with integration",
-        status: "Low" as const,
-        customer: "David Wilson",
-        time: "1 hour ago",
-      },
-      {
-        id: "1237",
-        subject: "Security concern with login",
-        status: "High" as const,
-        customer: "Emma Thompson",
-        time: "2 hours ago",
-      },
-    ];
-  },
-  ["tickets"],
-  { revalidate: 60 }, // Revalidate every minute
-);
-
-export default async function InboxPage() {
-  const tickets = await getTickets();
-
+function ErrorFallback({ error }: { error: Error }) {
   return (
-    <>
-      {/* Ticket Stats */}
-      <Suspense fallback={<div>Loading stats...</div>}>
-        <TicketStats />
-      </Suspense>
+    <Alert variant="destructive" className="mb-6">
+      <AlertDescription>
+        Something went wrong: {error.message}
+      </AlertDescription>
+    </Alert>
+  );
+}
 
-      {/* Ticket Dashboard */}
-      <Suspense fallback={<div>Loading tickets...</div>}>
-        <TicketDashboard tickets={tickets} />
-      </Suspense>
-    </>
+export default function InboxPage() {
+  return (
+    <div className="space-y-6">
+      {/* Admin View */}
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <Suspense fallback={<LoadingState message="Loading interface..." />}>
+          <RoleGate allowedRole="admin">
+            <AdminTicketManagement />
+          </RoleGate>
+        </Suspense>
+      </ErrorBoundary>
+
+      {/* Agent/Customer View */}
+      <RoleGate allowedRole="agent">
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <Suspense fallback={<LoadingState message="Loading statistics..." />}>
+            <TicketStats />
+          </Suspense>
+        </ErrorBoundary>
+
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <Suspense fallback={<LoadingState message="Loading tickets..." />}>
+            <TicketDashboard />
+          </Suspense>
+        </ErrorBoundary>
+      </RoleGate>
+    </div>
   );
 }

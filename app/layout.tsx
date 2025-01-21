@@ -1,6 +1,7 @@
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Geist, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -44,6 +45,7 @@ export default function RootLayout({
         >
           {children}
           <ThemeSwitcher />
+          <Toaster />
         </ThemeProvider>
       </body>
     </html>

@@ -1,2 +1,0 @@
--- Users table
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;

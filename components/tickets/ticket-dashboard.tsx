@@ -1,169 +1,327 @@
 "use client";
 
-import React, { useState, memo } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle } from "lucide-react";
+import React, { useState, memo, useEffect } from "react";
+import { AlertCircle, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useSearchParams } from "next/navigation";
+import { TicketWithComputed, TicketFilters } from "@/types/tickets";
+import { createClient } from "@/utils/supabase/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { formatDistanceToNow } from "date-fns";
+import { Skeleton } from "@/components/ui/skeleton";
 
-type Priority = "High" | "Medium" | "Low";
-type Ticket = {
-  id: string;
-  subject: string;
-  status: Priority;
-  customer: string;
-  time: string;
-};
-
-interface TicketDashboardProps {
-  tickets: Ticket[];
-}
-
-type PriorityFilter = {
-  [K in Lowercase<Priority>]: boolean;
-};
-
-const TicketRow = memo(({ ticket }: { ticket: Ticket }) => (
-  <div className="px-6 py-4 hover:opacity-90">
+// Memoized ticket row component
+const TicketRow = memo(({ ticket }: { ticket: TicketWithComputed }) => (
+  <div className="px-6 py-4 hover:bg-muted/50 transition-colors">
     <div className="flex items-center justify-between">
       <div className="flex items-center space-x-4">
         <div className="flex-shrink-0">
-          <div className="h-10 w-10 rounded-full flex items-center justify-center border">
+          <div className={`h-10 w-10 rounded-full flex items-center justify-center border ${
+            ticket.isOverdue ? 'border-destructive' : ''
+          }`}>
             <span className="text-sm font-medium">
-              {ticket.customer
-                .split(" ")
-                .map((n) => n[0])
-                .join("")}
+              {ticket.created_by.substring(0, 2).toUpperCase()}
             </span>
           </div>
         </div>
         <div>
-          <h3 className="text-sm font-medium">{ticket.subject}</h3>
-          <p className="text-sm opacity-70">
-            {ticket.customer} • {ticket.time}
+          <h3 className="text-sm font-medium">{ticket.title}</h3>
+          <p className="text-sm text-muted-foreground">
+            {ticket.created_by} • {ticket.timeElapsed}
           </p>
         </div>
       </div>
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border">
-        {ticket.status}
-      </span>
+      <div className="flex items-center space-x-2">
+        {ticket.isOverdue && (
+          <Badge variant="destructive">Overdue</Badge>
+        )}
+        <Badge variant={
+          ticket.priority_level === "high" ? "destructive" :
+          ticket.priority_level === "medium" ? "secondary" : "default"
+        }>
+          {ticket.priority_level || "none"}
+        </Badge>
+        <Badge variant={
+          ticket.status === "open" ? "default" :
+          ticket.status === "in_progress" ? "secondary" :
+          ticket.status === "closed" ? "outline" : "default"
+        }>
+          {ticket.status || "none"}
+        </Badge>
+      </div>
     </div>
   </div>
 ));
 
 TicketRow.displayName = "TicketRow";
 
-export function TicketDashboard({ tickets }: TicketDashboardProps) {
+// Loading skeleton for dashboard
+function DashboardLoading() {
+  return (
+    <Card>
+      <div className="p-6 border-b">
+        <div className="flex items-center justify-between mb-6">
+          <Skeleton className="h-6 w-24" />
+          <div className="flex items-center text-muted-foreground">
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Loading...
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-9 w-32" />
+          ))}
+        </div>
+      </div>
+      <div className="divide-y">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+              </div>
+              <div className="flex space-x-2">
+                <Skeleton className="h-6 w-20" />
+                <Skeleton className="h-6 w-20" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+// Error display component with retry
+function DashboardError({ error, onRetry }: { error: Error; onRetry: () => void }) {
+  return (
+    <Card className="p-6">
+      <Alert variant="destructive" className="mb-0">
+        <div className="flex items-center justify-between w-full">
+          <AlertDescription>
+            Failed to load tickets: {error.message}
+          </AlertDescription>
+          <button
+            onClick={onRetry}
+            className="px-3 py-1 text-sm bg-destructive-foreground text-destructive rounded-md hover:opacity-90"
+          >
+            Retry
+          </button>
+        </div>
+      </Alert>
+    </Card>
+  );
+}
+
+export function TicketDashboard() {
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get("q")?.toLowerCase() || "";
 
-  const [priorityFilters, setPriorityFilters] = useState<PriorityFilter>({
-    high: true,
-    medium: true,
-    low: true,
+  const [tickets, setTickets] = useState<TicketWithComputed[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  
+  const [filters, setFilters] = useState<{
+    status: string[];
+    priority: string[];
+    assignedToMe: boolean;
+    searchQuery: string;
+  }>({
+    status: [],
+    priority: [],
+    assignedToMe: true,
+    searchQuery: searchQuery
   });
 
-  const filteredTickets = tickets.filter((ticket) => {
-    const matchesPriority =
-      (ticket.status === "High" && priorityFilters.high) ||
-      (ticket.status === "Medium" && priorityFilters.medium) ||
-      (ticket.status === "Low" && priorityFilters.low);
+  // Fetch tickets function
+  async function loadTickets(isRetry = false) {
+    try {
+      if (!isRetry) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
 
-    const matchesSearch = searchQuery
-      ? ticket.subject.toLowerCase().includes(searchQuery) ||
-        ticket.customer.toLowerCase().includes(searchQuery)
-      : true;
+      const supabase = createClient();
 
-    return matchesPriority && matchesSearch;
-  });
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!user) throw new Error("Not authenticated");
+
+      // Start with base query
+      let query = supabase
+        .from("tickets")
+        .select("*")
+        .is("deleted_at", null);
+      
+      // Apply filters
+      if (filters.assignedToMe) {
+        query = query.eq("assigned_to", user.id);
+      }
+      if (filters.status && filters.status.length > 0) {
+        query = query.in("status", filters.status);
+      }
+      if (filters.priority && filters.priority.length > 0) {
+        query = query.in("priority_level", filters.priority);
+      }
+      if (filters.searchQuery) {
+        query = query.ilike("title", `%${filters.searchQuery}%`);
+      }
+
+      const { data: fetchedTickets, error: ticketsError } = await query.order("created_at", { ascending: false });
+      if (ticketsError) throw ticketsError;
+
+      // Add computed fields
+      const processedTickets = (fetchedTickets || []).map(ticket => ({
+        ...ticket,
+        timeElapsed: formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true }),
+        isOverdue: ticket.status !== "closed" && new Date(ticket.created_at) < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      }));
+
+      setTickets(processedTickets);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error("Failed to fetch tickets"));
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }
+
+  // Initial load and filter changes
+  useEffect(() => {
+    loadTickets();
+  }, [filters]);
+
+  // Update search query when URL param changes
+  useEffect(() => {
+    setFilters(prev => ({
+      ...prev,
+      searchQuery
+    }));
+  }, [searchQuery]);
 
   const parentRef = React.useRef<HTMLDivElement>(null);
 
   const rowVirtualizer = useVirtualizer({
-    count: filteredTickets.length,
+    count: tickets.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 72, // Approximate height of each row
+    estimateSize: () => 72,
     overscan: 5,
   });
 
-  const togglePriority = (priority: Priority) => {
-    setPriorityFilters((prev) => ({
-      ...prev,
-      [priority.toLowerCase() as Lowercase<Priority>]:
-        !prev[priority.toLowerCase() as Lowercase<Priority>],
-    }));
+  const toggleFilter = (type: "status" | "priority", value: string) => {
+    setFilters(prev => {
+      const currentValues = prev[type];
+      const newValues = currentValues && currentValues.includes(value)
+        ? currentValues.filter(v => v !== value)
+        : [...(currentValues || []), value];
+      
+      return {
+        ...prev,
+        [type]: newValues
+      };
+    });
   };
 
-  const getPriorityButtonStyle = (priority: Priority) => {
-    const baseStyle =
-      "flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors";
-    const activeStyle = priorityFilters[
-      priority.toLowerCase() as Lowercase<Priority>
-    ]
-      ? "bg-secondary"
-      : "bg-muted text-muted-foreground";
-    return `${baseStyle} ${activeStyle}`;
+  const getFilterButtonStyle = (type: "status" | "priority", value: string) => {
+    const isActive = filters[type] && filters[type]?.includes(value);
+    return `flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+      isActive ? "bg-secondary" : "bg-muted text-muted-foreground"
+    }`;
   };
+
+  if (error) {
+    return <DashboardError error={error} onRetry={() => loadTickets(true)} />;
+  }
+
+  if (isLoading) {
+    return <DashboardLoading />;
+  }
 
   return (
-    <>
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium">Tickets</h2>
-          <div className="flex space-x-2">
+    <div className="relative">
+      <Card>
+        <div className="p-6 border-b">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-medium">Tickets</h2>
+            {isRefreshing && (
+              <div className="flex items-center text-muted-foreground">
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Refreshing...
+              </div>
+            )}
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => togglePriority("High")}
-              className={getPriorityButtonStyle("High")}
+              onClick={() => toggleFilter("priority", "high")}
+              className={getFilterButtonStyle("priority", "high")}
             >
               <AlertCircle className="w-4 h-4 mr-1.5" />
               High Priority
             </button>
             <button
-              onClick={() => togglePriority("Medium")}
-              className={getPriorityButtonStyle("Medium")}
+              onClick={() => toggleFilter("priority", "medium")}
+              className={getFilterButtonStyle("priority", "medium")}
             >
               <AlertTriangle className="w-4 h-4 mr-1.5" />
               Medium Priority
             </button>
             <button
-              onClick={() => togglePriority("Low")}
-              className={getPriorityButtonStyle("Low")}
+              onClick={() => toggleFilter("status", "open")}
+              className={getFilterButtonStyle("status", "open")}
             >
-              <CheckCircle className="w-4 h-4 mr-1.5" />
-              Low Priority
+              Open
+            </button>
+            <button
+              onClick={() => toggleFilter("status", "in_progress")}
+              className={getFilterButtonStyle("status", "in_progress")}
+            >
+              In Progress
             </button>
           </div>
         </div>
-      </div>
 
-      <div className="bg-background rounded-lg border">
-        <div className="px-6 py-4 border-b">
-          <h2 className="text-lg font-medium">Recent Tickets</h2>
-        </div>
         <div ref={parentRef} className="divide-y max-h-[600px] overflow-auto">
-          <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: "100%",
-              position: "relative",
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => (
-              <div
-                key={filteredTickets[virtualRow.index].id}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              >
-                <TicketRow ticket={filteredTickets[virtualRow.index]} />
-              </div>
-            ))}
-          </div>
+          {tickets.length === 0 ? (
+            <div className="p-6 text-center text-muted-foreground">
+              No tickets found
+            </div>
+          ) : (
+            <div
+              style={{
+                height: `${rowVirtualizer.getTotalSize()}px`,
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((virtualRow) => (
+                <div
+                  key={tickets[virtualRow.index].id}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
+                >
+                  <TicketRow ticket={tickets[virtualRow.index]} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
-    </>
+      </Card>
+    </div>
   );
 }
