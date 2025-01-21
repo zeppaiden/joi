@@ -2,7 +2,7 @@
 
 import React, { useCallback } from "react";
 import { MessageSquare, X, Bot } from "lucide-react";
-import { debounce } from 'lodash';
+import { useDebouncedCallback } from 'use-debounce';
 import { Message, QuickResponse } from "./types";
 import { MessageBubble } from "./message-bubble";
 import { QuickResponsesPanel } from "./quick-responses-panel";
@@ -75,14 +75,16 @@ export function ChatWidget() {
     setSelectedCategory(null);
   }, []);
 
-  const debouncedScroll = useCallback(
-    debounce(() => {
+  const debouncedScroll = useDebouncedCallback(
+    () => {
       messagesEndRef.current?.scrollIntoView({
         behavior: "smooth",
       });
-    }, 100),
-    []
+    },
+    100
   );
+
+  const memoizedDebouncedScroll = useCallback(debouncedScroll, [debouncedScroll]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,8 +115,8 @@ export function ChatWidget() {
   };
 
   React.useEffect(() => {
-    debouncedScroll();
-  }, [messages, debouncedScroll]);
+    memoizedDebouncedScroll();
+  }, [messages, memoizedDebouncedScroll]);
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
