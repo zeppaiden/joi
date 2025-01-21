@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, memo, useEffect } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { AlertCircle, AlertTriangle, Loader2 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useSearchParams } from "next/navigation";
-import { TicketWithComputed, TicketFilters } from "@/types/tickets";
+import { TicketWithComputed } from "@/types/tickets";
 import { createClient } from "@/utils/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";

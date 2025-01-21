@@ -1,5 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
-import { Ticket, TicketStats, TicketWithComputed, TicketFilters } from "@/types/tickets";
+import { TicketStats, TicketWithComputed, TicketFilters } from "@/types/tickets";
 import { TicketFormData, TicketStatus, TicketPriority } from "@/schemas/tickets";
 import { formatDistanceToNow } from "date-fns";
 
@@ -17,11 +17,11 @@ export async function getAgentTickets(agentId: string, filters: TicketFilters): 
   if (filters.assignedToMe) {
     query = query.eq("assigned_to", agentId);
   }
-  if (filters.status.length > 0) {
-    query = query.in("status", filters.status);
+  if (filters.status && filters.status.length > 0) {
+    query = query.in("status", filters.status as string[]);
   }
-  if (filters.priority.length > 0) {
-    query = query.in("priority_level", filters.priority);
+  if (filters.priority && filters.priority.length > 0) {
+    query = query.in("priority_level", filters.priority as string[]);
   }
   if (filters.searchQuery) {
     query = query.ilike("title", `%${filters.searchQuery}%`);
@@ -208,8 +208,14 @@ export async function createTicket(data: TicketFormData & { created_by: string }
   const { data: ticket, error } = await supabase
     .from("tickets")
     .insert({
-      ...data,
       id: crypto.randomUUID(),
+      status: data.status,
+      priority_level: data.priority_level,
+      title: data.title,
+      assigned_to: data.assigned_to,
+      description: data.description,
+      created_by: data.created_by,
+      customer_id: data.created_by
     })
     .select(`
       *,

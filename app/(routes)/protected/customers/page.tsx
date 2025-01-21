@@ -1,15 +1,20 @@
 import { Suspense } from "react"
-import { CustomerTableParams } from "@/types/customers"
 import { CustomerTable } from "@/components/customers/customer-table"
 import { CustomerSearch } from "@/components/customers/customer-search"
 import { CustomerSearchSkeleton } from "@/components/customers/customer-search-skeleton"
 import { CustomerTableSkeleton } from "@/components/customers/customer-table-skeleton"
 
-interface CustomersPageProps {
-  searchParams: Partial<CustomerTableParams>
+/*
+type CustomersPageProps = {
+  searchParams: { [key: string]: string | string[] | undefined }
 }
+*/
 
-export default function CustomersPage({ searchParams }: CustomersPageProps) {
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
   return (
     <div className="flex flex-col space-y-6 p-6">
       <div className="flex flex-col space-y-4">

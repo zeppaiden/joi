@@ -9,7 +9,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { CustomerTableResponse } from "@/types/customers"
 
 interface CustomerPaginationProps {
   total: number

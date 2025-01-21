@@ -22,9 +22,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandShortcut,
 } from "@/components/ui/command";
-import type { DialogProps } from "@radix-ui/react-dialog";
 
 type User = Database["public"]["Tables"]["users"]["Row"] & {
   role: 'admin' | 'agent' | 'customer';
@@ -356,7 +354,7 @@ export default function TicketDetailsPage() {
         return;
       }
 
-      const { data, error } = await supabase
+      const { data: _data, error } = await supabase
         .from('ticket_tags')
         .insert({
           ticket_id: id,

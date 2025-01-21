@@ -1,16 +1,16 @@
 "use client"
 
-import { useCallback, useTransition } from "react"
+import { useTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Input } from "@/components/ui/input"
-import { useDebounce } from "@/hooks/use-debounce"
+import { useDebounce } from "use-debounce"
 
 export function CustomerSearch() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const [isPending, startTransition] = useTransition()
+  const [_isPending, startTransition] = useTransition()
   
-  const handleSearch = useDebounce((term: string) => {
+  const [handleSearch] = useDebounce((term: string) => {
     const params = new URLSearchParams(searchParams.toString())
     
     if (term) {
