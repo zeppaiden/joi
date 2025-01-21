@@ -41,15 +41,54 @@ export const updateSession = async (request: NextRequest) => {
 
     // This will refresh session if expired - required for Server Components
     // https://supabase.com/docs/guides/auth/server-side/nextjs
-    const user = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    // protected routes
-    if (request.nextUrl.pathname.startsWith("/protected") && user.error) {
+    // Handle unauthenticated users
+    if (userError || !user) {
+      // Allow access to auth-related and public routes
+      if (
+        request.nextUrl.pathname.startsWith("/auth") ||
+        request.nextUrl.pathname === "/" ||
+        request.nextUrl.pathname === "/sign-in"
+      ) {
+        return response;
+      }
+      // Redirect to sign in for protected routes
       return NextResponse.redirect(new URL("/sign-in", request.url));
     }
 
-    if (request.nextUrl.pathname === "/" && !user.error) {
-      return NextResponse.redirect(new URL("/protected", request.url));
+    // Check if user exists in users table
+    const { data: dbUser } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    // If authenticated but not in users table, redirect to onboarding
+    if (!dbUser && !request.nextUrl.pathname.startsWith("/onboarding")) {
+      return NextResponse.redirect(new URL("/onboarding", request.url));
+    }
+
+    // Handle role-based routing if user exists
+    if (dbUser) {
+      const { role } = dbUser;
+      const path = request.nextUrl.pathname;
+
+      // Block customers from dashboard
+      if (role === "customer" && path.startsWith("/dashboard")) {
+        return NextResponse.redirect(new URL("/portal", request.url));
+      }
+
+      // Block admin/agent from portal
+      if ((role === "admin" || role === "agent") && path.startsWith("/portal")) {
+        return NextResponse.redirect(new URL("/dashboard", request.url));
+      }
+
+      // Redirect to appropriate section if at root
+      if (path === "/") {
+        const redirectPath = role === "customer" ? "/portal" : "/dashboard";
+        return NextResponse.redirect(new URL(redirectPath, request.url));
+      }
     }
 
     // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
