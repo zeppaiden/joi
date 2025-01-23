@@ -23,6 +23,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type User = Database["public"]["Tables"]["users"]["Row"] & {
   role: 'admin' | 'agent' | 'customer';
@@ -41,8 +42,19 @@ type InternalNote = Database["public"]["Tables"]["internal_notes"]["Row"] & {
 type Ticket = Database["public"]["Tables"]["tickets"]["Row"] & {
   status: 'open' | 'in_progress' | 'resolved' | 'closed';
   priority_level: 'low' | 'medium' | 'high' | 'urgent';
-  customer?: User;
-  agent?: User;
+  organizations?: {
+    id: string;
+    name: string;
+  };
+  customer?: {
+    id: string;
+    email: string;
+  };
+  assigned_to?: {
+    id: string;
+    email: string;
+  };
+  phone?: string;
   tags?: Tag[];
 };
 
@@ -76,6 +88,7 @@ export default function TicketDetailsPage() {
   const [newTagName, setNewTagName] = useState("");
   const [internalNotes, setInternalNotes] = useState<InternalNote[]>([]);
   const [newNote, setNewNote] = useState("");
+  const [isAddingNote, setIsAddingNote] = useState(false);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -131,7 +144,7 @@ export default function TicketDetailsPage() {
         const ticketTags = ticketTagsData?.map(tt => tt.tag) || [];
 
         // Get internal notes
-        const { data: notesData } = await supabase
+        const { data: notesData, error: notesError } = await supabase
           .from('internal_notes')
           .select(`
             *,
@@ -140,6 +153,8 @@ export default function TicketDetailsPage() {
           .eq('ticket_id', id)
           .is('deleted_at', null)
           .order('created_at', { ascending: false });
+
+        if (notesError) throw notesError;
 
         setTicket(ticketData as unknown as Ticket);
         setMessages(messagesData as unknown as Message[]);
@@ -189,6 +204,43 @@ export default function TicketDetailsPage() {
             if (data) {
               setMessages(prev => [...prev, data as unknown as Message]);
               scrollToBottom();
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, supabase]);
+
+  // Subscribe to internal notes updates
+  useEffect(() => {
+    const channel = supabase
+      .channel(`internal_notes:${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'internal_notes',
+          filter: `ticket_id=eq.${id}`,
+        },
+        async (payload) => {
+          if (payload.eventType === 'INSERT') {
+            // Fetch the complete note with user details
+            const { data } = await supabase
+              .from('internal_notes')
+              .select(`
+                *,
+                user:users (id, email, role)
+              `)
+              .eq('id', payload.new.id)
+              .single();
+
+            if (data) {
+              setInternalNotes(prev => [data as InternalNote, ...prev]);
             }
           }
         }
@@ -407,36 +459,39 @@ export default function TicketDetailsPage() {
   };
 
   // Add internal note
-  const addInternalNote = async () => {
-    if (!newNote.trim()) return;
+  const addInternalNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNote.trim() || isAddingNote) return;
 
+    setIsAddingNote(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: note, error } = await supabase
+      const { error } = await supabase
         .from('internal_notes')
         .insert({
           ticket_id: id,
           content: newNote.trim(),
           created_by: user.id,
-        })
-        .select(`
-          *,
-          user:users!internal_notes_created_by_fkey(id, email, role)
-        `)
-        .single();
+        });
 
       if (error) throw error;
 
-      setInternalNotes(prev => [note as unknown as InternalNote, ...prev]);
       setNewNote("");
+      toast({
+        title: "Success",
+        description: "Internal note added",
+      });
     } catch (error) {
+      console.error('Error adding note:', error);
       toast({
         title: "Error",
-        description: "Failed to add note",
+        description: "Failed to add internal note",
         variant: "destructive",
       });
+    } finally {
+      setIsAddingNote(false);
     }
   };
 
@@ -554,239 +609,252 @@ export default function TicketDetailsPage() {
     <RoleGate allowedRole="admin">
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.back()}
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <h1 className="text-2xl font-bold">{ticket.title}</h1>
-          <Badge variant={
-            ticket.priority_level === "urgent" ? "destructive" :
-            ticket.priority_level === "high" ? "destructive" :
-            ticket.priority_level === "medium" ? "secondary" :
-            "default"
-          }>
-            {ticket.priority_level}
-          </Badge>
-          <Badge variant={
-            ticket.status === "open" ? "default" :
-            ticket.status === "in_progress" ? "secondary" :
-            ticket.status === "resolved" ? "secondary" :
-            "outline"
-          }>
-            {ticket.status}
-          </Badge>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <h1 className="text-2xl font-bold">Ticket {ticket.id}</h1>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline">Update Status</Button>
+            <Button variant="default">Resolve Ticket</Button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-6">
-          {/* Ticket Details */}
-          <div className="col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Description</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="whitespace-pre-wrap">{ticket.description}</p>
-              </CardContent>
-            </Card>
-
-            {/* Chat Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Chat</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {!ticket.agent && (
-                  <div className="bg-destructive/10 text-destructive rounded-lg p-4 mb-4 text-sm">
-                    Please assign an agent to this ticket before sending messages.
-                    This ensures proper ticket handling and customer support.
-                  </div>
-                )}
-                <ScrollArea className="h-[400px] border rounded-lg mb-4 p-4">
-                  <div className="flex flex-col space-y-4 w-full">
-                    {messages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={cn(
-                          "flex w-full",
-                          msg.user.role === "customer" ? "justify-start" : "justify-end"
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            "max-w-[80%] rounded-lg p-3 overflow-hidden",
-                            msg.user.role === "customer"
-                              ? "bg-muted"
-                              : "bg-primary text-primary-foreground"
-                          )}
-                        >
-                          <div className="text-xs opacity-70 mb-1 truncate">
-                            {msg.user.email} • {new Date(msg.created_at).toLocaleTimeString()}
-                          </div>
-                          <div className="whitespace-pre-wrap break-all">
-                            {msg.content}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </ScrollArea>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    sendMessage();
-                  }}
-                  className="flex gap-2"
-                >
-                  <Textarea
-                    placeholder={ticket.agent 
-                      ? "Type your message..." 
-                      : "Assign an agent before sending messages..."}
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    className="min-h-[80px]"
-                    disabled={!ticket.agent}
-                  />
-                  <Button
-                    type="submit"
-                    className="flex-shrink-0"
-                    disabled={isSending || !message.trim() || !ticket.agent}
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
-
+        {/* Top Section - Customer and Ticket Info */}
+        <div className="grid grid-cols-2 gap-6">
           {/* Customer Information */}
-          <div className="space-y-6">
-            {/* Tags Section */}
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle>Tags</CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsTagDialogOpen(true)}
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {ticketTags.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">
-                      No tags yet. Click + to add tags.
-                    </div>
-                  ) : (
-                    ticketTags.map((tag) => (
-                      <Badge
-                        key={tag.id}
-                        variant="secondary"
-                        className="flex items-center gap-1 group relative pr-6"
-                      >
-                        {tag.name}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-4 w-4 p-0 absolute right-1 opacity-70 hover:opacity-100"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const shouldDelete = window.confirm('Do you want to delete this tag completely? Click Cancel to just remove it from this ticket.');
-                            if (shouldDelete) {
-                              deleteTag(tag.id);
-                            } else {
-                              removeTagFromTicket(tag.id);
-                            }
-                          }}
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </Badge>
-                    ))
-                  )}
+          <Card>
+            <CardHeader>
+              <CardTitle>Customer Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <dl className="space-y-4">
+                <div>
+                  <dt className="text-sm font-medium text-muted-foreground">Name</dt>
+                  <dd>{ticket.customer?.email}</dd>
                 </div>
-              </CardContent>
-            </Card>
+                <div>
+                  <dt className="text-sm font-medium text-muted-foreground">Email</dt>
+                  <dd>{ticket.customer?.email}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-muted-foreground">Company</dt>
+                  <dd>{ticket.organizations?.name}</dd>
+                </div>
+                <div>
+                  <dt className="text-sm font-medium text-muted-foreground">Phone</dt>
+                  <dd>{ticket.phone || 'Not provided'}</dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
 
-            {/* Internal Notes */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Internal Notes</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+          {/* Ticket Details */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Ticket Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
                 <div className="flex gap-2">
+                  <Badge variant={
+                    ticket.status === "open" ? "default" :
+                    ticket.status === "in_progress" ? "secondary" :
+                    ticket.status === "resolved" ? "secondary" :
+                    "outline"
+                  }>
+                    {ticket.status?.replace('_', ' ')}
+                  </Badge>
+                  <Badge variant={
+                    ticket.priority_level === "urgent" ? "destructive" :
+                    ticket.priority_level === "high" ? "destructive" :
+                    ticket.priority_level === "medium" ? "secondary" :
+                    "default"
+                  }>
+                    {ticket.priority_level} priority
+                  </Badge>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Subject</h3>
+                  <p>{ticket.title}</p>
+                </div>
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Description</h3>
+                  <p className="whitespace-pre-wrap">{ticket.description}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-muted-foreground">Created</h3>
+                    <p>{new Date(ticket.created_at).toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-muted-foreground">Last Updated</h3>
+                    <p>{new Date(ticket.updated_at).toLocaleString()}</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Message History */}
+        <Card>
+          <CardHeader className="pb-3">
+            <Tabs defaultValue="messages">
+              <TabsList>
+                <TabsTrigger value="messages">Message History</TabsTrigger>
+                <TabsTrigger value="email">Email History</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </CardHeader>
+          <CardContent>
+            {!ticket.assigned_to && (
+              <div className="bg-destructive/10 text-destructive rounded-lg p-4 mb-4 text-sm">
+                Please assign an agent to this ticket before sending messages.
+                This ensures proper ticket handling and customer support.
+              </div>
+            )}
+            <ScrollArea className="h-[400px] border rounded-lg mb-4 p-4">
+              <div className="flex flex-col space-y-4">
+                {messages?.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={cn(
+                      "flex w-full",
+                      msg.user.role === "customer" ? "justify-start" : "justify-end"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "max-w-[80%] rounded-lg p-3 overflow-hidden",
+                        msg.user.role === "customer"
+                          ? "bg-muted"
+                          : "bg-primary text-primary-foreground"
+                      )}
+                    >
+                      <div className="text-xs opacity-70 mb-1">
+                        {msg.user.email} • {new Date(msg.created_at).toLocaleTimeString()}
+                      </div>
+                      <div className="whitespace-pre-wrap break-words">
+                        {msg.content}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+            <form className="flex gap-2">
+              <Textarea
+                placeholder={ticket.assigned_to 
+                  ? "Type your message..." 
+                  : "Assign an agent before sending messages..."}
+                className="min-h-[80px]"
+                disabled={!ticket.assigned_to}
+              />
+              <Button 
+                className="flex-shrink-0"
+                disabled={!ticket.assigned_to}
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Bottom Section - Internal Notes and Tags */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* Internal Notes */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Internal Notes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <form onSubmit={addInternalNote} className="flex gap-2">
                   <Textarea
                     placeholder="Add an internal note..."
                     value={newNote}
                     onChange={(e) => setNewNote(e.target.value)}
+                    className="min-h-[80px]"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        addInternalNote(e);
+                      }
+                    }}
                   />
-                  <Button
+                  <Button 
+                    type="submit" 
                     className="flex-shrink-0"
-                    onClick={addInternalNote}
-                    disabled={!newNote.trim()}
+                    disabled={isAddingNote || !newNote.trim()}
                   >
                     <Plus className="w-4 h-4" />
                   </Button>
-                </div>
-                <ScrollArea className="h-[200px]">
+                </form>
+
+                <ScrollArea className="h-[300px] pr-4">
                   <div className="space-y-4">
                     {internalNotes.map((note) => (
-                      <div key={note.id} className="space-y-1">
-                        <div className="text-sm text-muted-foreground">
-                          {note.user.email} • {new Date(note.created_at).toLocaleString()}
+                      <div key={note.id} className="bg-muted rounded-lg p-3">
+                        <div className="text-sm font-medium">{note.user.email}</div>
+                        <div className="text-xs text-muted-foreground mb-2">
+                          {new Date(note.created_at).toLocaleString()}
                         </div>
                         <p className="text-sm whitespace-pre-wrap">{note.content}</p>
                       </div>
                     ))}
                   </div>
                 </ScrollArea>
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Existing Customer Information Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Customer Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <dl className="space-y-2">
-                  <div>
-                    <dt className="text-sm text-muted-foreground">Email</dt>
-                    <dd>{ticket.customer?.email}</dd>
+          {/* Tags */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle>Tags</CardTitle>
+              <Button variant="outline" size="sm">
+                <Plus className="w-4 h-4" />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {ticketTags.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    No tags yet. Click + to add tags.
                   </div>
-                </dl>
-              </CardContent>
-            </Card>
-
-            {/* Existing Ticket Information Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Ticket Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <dl className="space-y-2">
-                  <div>
-                    <dt className="text-sm text-muted-foreground">Created</dt>
-                    <dd>{new Date(ticket.created_at).toLocaleString()}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm text-muted-foreground">Last Updated</dt>
-                    <dd>{new Date(ticket.updated_at).toLocaleString()}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm text-muted-foreground">Assigned To</dt>
-                    <dd>{ticket.agent?.email || 'Unassigned'}</dd>
-                  </div>
-                </dl>
-              </CardContent>
-            </Card>
-          </div>
+                ) : (
+                  ticketTags.map((tag) => (
+                    <Badge
+                      key={tag.id}
+                      variant="secondary"
+                      className="flex items-center gap-1 group relative pr-6"
+                    >
+                      {tag.name}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-4 w-4 p-0 absolute right-1 opacity-70 hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const shouldDelete = window.confirm('Do you want to delete this tag completely? Click Cancel to just remove it from this ticket.');
+                          if (shouldDelete) {
+                            deleteTag(tag.id);
+                          } else {
+                            removeTagFromTicket(tag.id);
+                          }
+                        }}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </Badge>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
