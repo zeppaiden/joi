@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
+import { CustomerCreateTicket } from "@/components/customer/customer-create-ticket";
 
 export default async function CustomerPortalPage() {
   const supabase = await createClient();
@@ -11,6 +12,17 @@ export default async function CustomerPortalPage() {
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
     redirect("/login");
+  }
+
+  // Get organizations the customer has access to
+  const { data: organizations, error: orgsError } = await supabase
+    .from('organizations')
+    .select('*')
+    .is('deleted_at', null);
+
+  if (orgsError) {
+    console.error('Error fetching organizations:', orgsError);
+    return <div>Error loading organizations</div>;
   }
 
   // Get user's tickets with organization info
@@ -28,6 +40,7 @@ export default async function CustomerPortalPage() {
       )
     `)
     .eq('customer_id', user.id)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
   if (ticketsError) {
@@ -37,7 +50,10 @@ export default async function CustomerPortalPage() {
 
   return (
     <div className="container mx-auto py-6 max-w-4xl">
-      <h1 className="text-2xl font-bold mb-6">My Support Tickets</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">My Support Tickets</h1>
+        <CustomerCreateTicket userId={user.id} organizations={organizations || []} />
+      </div>
       
       <div className="space-y-4">
         {tickets?.length === 0 ? (
