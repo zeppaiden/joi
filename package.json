@@ -10,7 +10,7 @@
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "check-format": "prettier --check \"**/*.{ts,tsx,json,md}\"",
-    "generate": "dotenv -e .env.local -- supabase gen types typescript --project-id \"$SUPABASE_PROJECT_ID\" --schema public > types/supabase.ts"
+    "types": "dotenv -e .env.local -- supabase gen types typescript --project-id \"$SUPABASE_PROJECT_ID\" --schema public > types/supabase.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

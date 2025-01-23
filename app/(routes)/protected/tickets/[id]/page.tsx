@@ -24,6 +24,16 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 type User = Database["public"]["Tables"]["users"]["Row"] & {
   role: 'admin' | 'agent' | 'customer';
@@ -36,6 +46,10 @@ type Message = Database["public"]["Tables"]["messages"]["Row"] & {
 type Tag = Database["public"]["Tables"]["tags"]["Row"];
 
 type InternalNote = Database["public"]["Tables"]["internal_notes"]["Row"] & {
+  user: User;
+};
+
+type Email = Database["public"]["Tables"]["emails"]["Row"] & {
   user: User;
 };
 
@@ -89,6 +103,15 @@ export default function TicketDetailsPage() {
   const [internalNotes, setInternalNotes] = useState<InternalNote[]>([]);
   const [newNote, setNewNote] = useState("");
   const [isAddingNote, setIsAddingNote] = useState(false);
+  const [emails, setEmails] = useState<Email[]>([]);
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailForm, setEmailForm] = useState({
+    to: "",
+    cc: "",
+    bcc: "",
+    subject: "",
+    body: ""
+  });
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -165,11 +188,24 @@ export default function TicketDetailsPage() {
 
         if (notesError) throw notesError;
 
+        // Get emails
+        const { data: emailsData, error: emailsError } = await supabase
+          .from('emails')
+          .select(`
+            *,
+            user:users!emails_sent_by_fkey(id, email, role)
+          `)
+          .eq('ticket_id', id)
+          .order('created_at', { ascending: false });
+
+        if (emailsError) throw emailsError;
+
         setTicket(ticketData as unknown as Ticket);
         setMessages(messagesData as unknown as Message[]);
         setTags(tagsData || []);
         setTicketTags(ticketTags);
         setInternalNotes(notesData as unknown as InternalNote[] || []);
+        setEmails(emailsData as unknown as Email[]);
         setIsLoading(false);
       } catch (error) {
         console.error('Error loading data:', error);
@@ -497,6 +533,49 @@ export default function TicketDetailsPage() {
     }
   };
 
+  // Send email
+  const sendEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { error } = await supabase.from('emails').insert({
+        ticket_id: id,
+        sent_by: user.id,
+        to_email: emailForm.to,
+        cc: emailForm.cc || null,
+        bcc: emailForm.bcc || null,
+        subject: emailForm.subject,
+        body: emailForm.body,
+        status: 'sent'
+      });
+
+      if (error) throw error;
+
+      setIsEmailDialogOpen(false);
+      setEmailForm({
+        to: "",
+        cc: "",
+        bcc: "",
+        subject: "",
+        body: ""
+      });
+
+      toast({
+        title: "Success",
+        description: "Email sent successfully",
+      });
+    } catch (error) {
+      console.error('Error sending email:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send email",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -709,60 +788,119 @@ export default function TicketDetailsPage() {
                 <TabsTrigger value="messages">Message History</TabsTrigger>
                 <TabsTrigger value="email">Email History</TabsTrigger>
               </TabsList>
+              
+              {/* Messages Tab Content */}
+              <TabsContent value="messages">
+                {!ticket.assigned_to && (
+                  <div className="bg-destructive/10 text-destructive rounded-lg p-4 mb-4 text-sm">
+                    Please assign an agent to this ticket before sending messages.
+                    This ensures proper ticket handling and customer support.
+                  </div>
+                )}
+                <ScrollArea className="h-[400px] border rounded-lg mb-4 p-4">
+                  <div className="flex flex-col space-y-4">
+                    {messages?.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={cn(
+                          "flex w-full",
+                          msg.user.role === "customer" ? "justify-start" : "justify-end"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "max-w-[80%] rounded-lg p-3 overflow-hidden",
+                            msg.user.role === "customer"
+                              ? "bg-muted"
+                              : "bg-primary text-primary-foreground"
+                          )}
+                        >
+                          <div className="text-xs opacity-70 mb-1">
+                            {msg.user.email} • {new Date(msg.created_at).toLocaleTimeString()}
+                          </div>
+                          <div className="whitespace-pre-wrap break-words">
+                            {msg.content}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+                <form className="flex gap-2">
+                  <Textarea
+                    placeholder={ticket.assigned_to 
+                      ? "Type your message..." 
+                      : "Assign an agent before sending messages..."}
+                    className="min-h-[80px]"
+                    disabled={!ticket.assigned_to}
+                  />
+                  <Button 
+                    className="flex-shrink-0"
+                    disabled={!ticket.assigned_to}
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </form>
+              </TabsContent>
+
+              {/* Email Tab Content */}
+              <TabsContent value="email" className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium">Email History</h3>
+                  <Button onClick={() => {
+                    setEmailForm(prev => ({
+                      ...prev,
+                      to: ticket.customer?.email || "",
+                      subject: `Re: ${ticket.title}`
+                    }));
+                    setIsEmailDialogOpen(true);
+                  }}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    New Email
+                  </Button>
+                </div>
+                
+                <ScrollArea className="h-[400px]">
+                  <div className="space-y-4">
+                    {emails.length === 0 ? (
+                      <div className="text-center text-muted-foreground py-8">
+                        No emails sent yet
+                      </div>
+                    ) : (
+                      emails.map((email) => (
+                        <Card key={email.id}>
+                          <CardHeader>
+                            <div className="flex justify-between items-start">
+                              <div className="space-y-1">
+                                <CardTitle>{email.subject}</CardTitle>
+                                <div className="text-sm text-muted-foreground">
+                                  From: {email.user.email}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  To: {email.to_email}
+                                </div>
+                                {email.cc && (
+                                  <div className="text-sm text-muted-foreground">
+                                    CC: {email.cc}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {new Date(email.created_at).toLocaleString()}
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent>
+                            <p className="whitespace-pre-wrap">{email.body}</p>
+                          </CardContent>
+                        </Card>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              </TabsContent>
             </Tabs>
           </CardHeader>
-          <CardContent>
-            {!ticket.assigned_to && (
-              <div className="bg-destructive/10 text-destructive rounded-lg p-4 mb-4 text-sm">
-                Please assign an agent to this ticket before sending messages.
-                This ensures proper ticket handling and customer support.
-              </div>
-            )}
-            <ScrollArea className="h-[400px] border rounded-lg mb-4 p-4">
-              <div className="flex flex-col space-y-4">
-                {messages?.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={cn(
-                      "flex w-full",
-                      msg.user.role === "customer" ? "justify-start" : "justify-end"
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "max-w-[80%] rounded-lg p-3 overflow-hidden",
-                        msg.user.role === "customer"
-                          ? "bg-muted"
-                          : "bg-primary text-primary-foreground"
-                      )}
-                    >
-                      <div className="text-xs opacity-70 mb-1">
-                        {msg.user.email} • {new Date(msg.created_at).toLocaleTimeString()}
-                      </div>
-                      <div className="whitespace-pre-wrap break-words">
-                        {msg.content}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-            <form className="flex gap-2">
-              <Textarea
-                placeholder={ticket.assigned_to 
-                  ? "Type your message..." 
-                  : "Assign an agent before sending messages..."}
-                className="min-h-[80px]"
-                disabled={!ticket.assigned_to}
-              />
-              <Button 
-                className="flex-shrink-0"
-                disabled={!ticket.assigned_to}
-              >
-                <Send className="w-4 h-4" />
-              </Button>
-            </form>
-          </CardContent>
         </Card>
 
         {/* Bottom Section - Internal Notes and Tags */}
@@ -947,6 +1085,76 @@ export default function TicketDetailsPage() {
           </CommandList>
         </Command>
       </CommandDialog>
+
+      {/* Email Composition Dialog */}
+      <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Compose Email</DialogTitle>
+            <DialogDescription>
+              Send an email to the customer regarding this ticket
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={sendEmail} className="space-y-4">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="to">To</Label>
+                  <Input
+                    id="to"
+                    value={emailForm.to}
+                    onChange={(e) => setEmailForm(prev => ({ ...prev, to: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="subject">Subject</Label>
+                  <Input
+                    id="subject"
+                    value={emailForm.subject}
+                    onChange={(e) => setEmailForm(prev => ({ ...prev, subject: e.target.value }))}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="cc">CC</Label>
+                  <Input
+                    id="cc"
+                    value={emailForm.cc}
+                    onChange={(e) => setEmailForm(prev => ({ ...prev, cc: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bcc">BCC</Label>
+                  <Input
+                    id="bcc"
+                    value={emailForm.bcc}
+                    onChange={(e) => setEmailForm(prev => ({ ...prev, bcc: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="body">Message</Label>
+                <Textarea
+                  id="body"
+                  value={emailForm.body}
+                  onChange={(e) => setEmailForm(prev => ({ ...prev, body: e.target.value }))}
+                  className="min-h-[200px]"
+                  required
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsEmailDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">Send Email</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </RoleGate>
   );
 } 

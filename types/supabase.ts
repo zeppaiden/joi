@@ -7,33 +7,68 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          operationName?: string
-          query?: string
-          variables?: Json
-          extensions?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
+      emails: {
+        Row: {
+          bcc: string | null
+          body: string
+          cc: string | null
+          created_at: string
+          deleted_at: string | null
+          id: string
+          sent_by: string
+          status: string
+          subject: string
+          ticket_id: string
+          to_email: string
+          updated_at: string
+        }
+        Insert: {
+          bcc?: string | null
+          body: string
+          cc?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          sent_by: string
+          status?: string
+          subject: string
+          ticket_id: string
+          to_email: string
+          updated_at?: string
+        }
+        Update: {
+          bcc?: string | null
+          body?: string
+          cc?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          sent_by?: string
+          status?: string
+          subject?: string
+          ticket_id?: string
+          to_email?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emails_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "emails_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       internal_notes: {
         Row: {
           content: string
