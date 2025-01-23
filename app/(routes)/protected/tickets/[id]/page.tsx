@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Send, Plus, X } from "lucide-react";
+import { ArrowLeft, Send, Plus, X, Paperclip, ListChecks } from "lucide-react";
 import { Database } from "@/types/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -85,6 +85,29 @@ const TAG_COLORS: Record<string, { bg: string, text: string, hover: string }> = 
   'Billing': { bg: 'bg-orange-100', text: 'text-orange-700', hover: 'hover:bg-orange-200' },
 };
 
+const MESSAGE_TEMPLATES = [
+  {
+    title: "Acknowledge Receipt",
+    message: "Thank you for reaching out. I'm reviewing your request and will get back to you shortly."
+  },
+  {
+    title: "Request More Information",
+    message: "To better assist you, could you please provide more details about the issue you're experiencing?"
+  },
+  {
+    title: "Resolution Confirmation",
+    message: "I believe I've resolved the issue you reported. Could you please confirm if everything is working as expected now?"
+  },
+  {
+    title: "Escalation Notice",
+    message: "I'm escalating this to our specialized team who will be better equipped to handle your request. They will contact you shortly."
+  },
+  {
+    title: "Follow Up",
+    message: "I'm following up on your recent request. Have you had a chance to try the solution we discussed?"
+  }
+];
+
 export default function TicketDetailsPage() {
   const router = useRouter();
   const { id } = useParams() as Params;
@@ -112,6 +135,7 @@ export default function TicketDetailsPage() {
     subject: "",
     body: ""
   });
+  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -972,35 +996,49 @@ export default function TicketDetailsPage() {
                     <div ref={messagesEndRef} />
                   </div>
                 </ScrollArea>
-                <form onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!message.trim() || isSending) return;
-                  await sendMessage();
-                }} className="flex gap-2">
-                  <Textarea
-                    placeholder={ticket.assigned_to 
-                      ? "Type your message..." 
-                      : "Assign an agent before sending messages..."}
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    className="min-h-[80px]"
-                    disabled={!ticket.assigned_to || isSending}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (!message.trim() || isSending) return;
-                        sendMessage();
-                      }
-                    }}
-                  />
-                  <Button 
-                    type="submit"
-                    className="flex-shrink-0"
-                    disabled={!ticket.assigned_to || isSending || !message.trim()}
-                  >
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </form>
+                <div className="space-y-6">
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!message.trim() || isSending) return;
+                    await sendMessage();
+                  }} className="space-y-2">
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="flex-shrink-0"
+                        disabled={!ticket?.assigned_to || isSending}
+                        onClick={() => setIsTemplateDialogOpen(true)}
+                      >
+                        <ListChecks className="w-4 h-4" />
+                      </Button>
+                      <Textarea
+                        placeholder={ticket?.assigned_to 
+                          ? "Type your message..." 
+                          : "Assign an agent before sending messages..."}
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        className="min-h-[80px]"
+                        disabled={!ticket?.assigned_to || isSending}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            if (!message.trim() || isSending) return;
+                            sendMessage();
+                          }
+                        }}
+                      />
+                      <Button 
+                        type="submit"
+                        className="flex-shrink-0"
+                        disabled={!ticket?.assigned_to || isSending || !message.trim()}
+                      >
+                        <Send className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </form>
+                </div>
               </TabsContent>
 
               {/* Email Tab Content */}
@@ -1315,6 +1353,35 @@ export default function TicketDetailsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Message Template Dialog */}
+      <CommandDialog modal open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
+        <Command shouldFilter={false} className="rounded-lg border shadow-md">
+          <div className="border-b px-3 py-2">
+            <h2 className="text-sm font-medium">Select Message Template</h2>
+          </div>
+          <CommandList>
+            <CommandGroup>
+              {MESSAGE_TEMPLATES.map((template) => (
+                <CommandItem
+                  key={template.title}
+                  value={template.title}
+                  onSelect={() => {
+                    setMessage(template.message);
+                    setIsTemplateDialogOpen(false);
+                  }}
+                  className="flex flex-col items-start gap-1"
+                >
+                  <div className="font-medium">{template.title}</div>
+                  <div className="text-xs text-muted-foreground line-clamp-1">
+                    {template.message}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </CommandDialog>
     </RoleGate>
   );
 } 
