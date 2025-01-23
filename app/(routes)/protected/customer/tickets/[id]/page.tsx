@@ -4,17 +4,24 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CustomerTicketChat } from "@/components/customer/customer-ticket-chat";
 
-interface Props {
-  params: {
-    id: string;
-  };
-}
-
-export default async function CustomerTicketPage({ params }: Props) {
+export default async function CustomerTicketPage({
+  params,
+}: {
+  params: { id: string }
+}) {
+  // Properly await params before accessing properties
+  const { id } = await params;
   const supabase = await createClient();
 
+  // Get current user using the secure method
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  
+  if (userError || !user) {
+    return notFound();
+  }
+
   // Get ticket with organization and agent details
-  const { data: ticket, error } = await supabase
+  const { data: ticket, error: ticketError } = await supabase
     .from('tickets')
     .select(`
       *,
@@ -22,30 +29,31 @@ export default async function CustomerTicketPage({ params }: Props) {
         id,
         name
       ),
-      assigned_to:users!assigned_to (
-        id,
-        email
-      )
-    `)
-    .eq('id', params.id)
-    .single();
-
-  if (error || !ticket) {
-    notFound();
-  }
-
-  // Get initial messages
-  const { data: messages } = await supabase
-    .from('messages')
-    .select(`
-      *,
-      user:users (
+      agent:users!tickets_assigned_to_fkey (
         id,
         email,
         role
       )
     `)
-    .eq('ticket_id', params.id)
+    .eq('id', id)
+    .single();
+
+  if (ticketError || !ticket) {
+    return notFound();
+  }
+
+  // Get messages for this ticket
+  const { data: messages } = await supabase
+    .from('messages')
+    .select(`
+      *,
+      user:users!messages_user_id_fkey (
+        id,
+        email,
+        role
+      )
+    `)
+    .eq('ticket_id', id)
     .order('created_at', { ascending: true });
 
   return (
@@ -66,11 +74,11 @@ export default async function CustomerTicketPage({ params }: Props) {
                 ticket.status === "resolved" ? "secondary" :
                 "outline"
               }>
-                {ticket.status.replace('_', ' ')}
+                {ticket.status?.replace('_', ' ') || 'unknown'}
               </Badge>
-              {ticket.assigned_to && (
+              {ticket.agent && (
                 <p className="text-sm text-muted-foreground">
-                  Agent: {ticket.assigned_to.email}
+                  Agent: {ticket.agent.email}
                 </p>
               )}
             </div>

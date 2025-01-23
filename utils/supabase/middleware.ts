@@ -36,10 +36,10 @@ export async function updateSession(request: NextRequest) {
 
   // Refresh session if expired
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     // If no session and trying to access protected routes, redirect to login
     if (request.nextUrl.pathname.startsWith("/protected")) {
       return NextResponse.redirect(new URL("/login", request.url));
@@ -51,7 +51,7 @@ export async function updateSession(request: NextRequest) {
   const { data: userData } = await supabase
     .from('users')
     .select('role')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single();
 
   const role = userData?.role;
