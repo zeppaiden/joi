@@ -576,107 +576,236 @@ export default function TicketDetailsPage() {
     }
   };
 
+  // Escalate ticket
+  const escalateTicket = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // Update ticket priority and add an internal note about escalation
+      const { error: ticketError } = await supabase
+        .from('tickets')
+        .update({
+          priority_level: 'urgent',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', ticket.id);
+
+      if (ticketError) throw ticketError;
+
+      // Add internal note about escalation
+      const { error: noteError } = await supabase
+        .from('internal_notes')
+        .insert({
+          ticket_id: id,
+          content: `Ticket escalated to urgent priority by ${user.email}`,
+          created_by: user.id
+        });
+
+      if (noteError) throw noteError;
+
+      // Update local state
+      setTicket(prev => prev ? { ...prev, priority_level: 'urgent' } : null);
+
+      toast({
+        title: "Success",
+        description: "Ticket has been escalated",
+      });
+    } catch (error) {
+      console.error('Error escalating ticket:', error);
+      toast({
+        title: "Error",
+        description: "Failed to escalate ticket",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Resolve ticket
+  const resolveTicket = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // Update ticket status to resolved
+      const { error: ticketError } = await supabase
+        .from('tickets')
+        .update({
+          status: 'resolved',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', ticket.id);
+
+      if (ticketError) throw ticketError;
+
+      // Add internal note about resolution
+      const { error: noteError } = await supabase
+        .from('internal_notes')
+        .insert({
+          ticket_id: id,
+          content: `Ticket resolved by ${user.email}`,
+          created_by: user.id
+        });
+
+      if (noteError) throw noteError;
+
+      // Update local state
+      setTicket(prev => prev ? { ...prev, status: 'resolved' } : null);
+
+      toast({
+        title: "Success",
+        description: "Ticket has been resolved",
+      });
+
+      // Redirect to inbox after short delay
+      setTimeout(() => {
+        router.push('/protected/inbox');
+      }, 1500);
+    } catch (error) {
+      console.error('Error resolving ticket:', error);
+      toast({
+        title: "Error",
+        description: "Failed to resolve ticket",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
         {/* Header Skeleton */}
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-10 w-10" />
-          <Skeleton className="h-8 w-[300px]" />
-          <Skeleton className="h-6 w-20" />
-          <Skeleton className="h-6 w-20" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-10 w-10" />
+            <Skeleton className="h-8 w-[200px]" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-[120px]" />
+            <Skeleton className="h-10 w-[120px]" />
+          </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-6">
-          <div className="col-span-2 space-y-6">
-            {/* Description Skeleton */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Description</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-[90%]" />
-                  <Skeleton className="h-4 w-[80%]" />
+        {/* Top Section - Customer and Ticket Info Skeletons */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* Customer Information Skeleton */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Customer Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <Skeleton className="h-4 w-12 mb-1" />
+                  <Skeleton className="h-5 w-[200px]" />
                 </div>
-              </CardContent>
-            </Card>
+                <div>
+                  <Skeleton className="h-4 w-12 mb-1" />
+                  <Skeleton className="h-5 w-[250px]" />
+                </div>
+                <div>
+                  <Skeleton className="h-4 w-16 mb-1" />
+                  <Skeleton className="h-5 w-[180px]" />
+                </div>
+                <div>
+                  <Skeleton className="h-4 w-14 mb-1" />
+                  <Skeleton className="h-5 w-[150px]" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Chat Skeleton */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Chat</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[400px] border rounded-lg mb-4 p-4">
-                  <div className="flex flex-col space-y-4">
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%] space-y-2">
-                        <Skeleton className="h-4 w-[200px]" />
-                        <Skeleton className="h-16 w-[300px]" />
-                      </div>
-                    </div>
-                    <div className="flex justify-end">
-                      <div className="max-w-[80%] space-y-2">
-                        <Skeleton className="h-4 w-[180px]" />
-                        <Skeleton className="h-12 w-[250px]" />
-                      </div>
-                    </div>
-                    <div className="flex justify-start">
-                      <div className="max-w-[80%] space-y-2">
-                        <Skeleton className="h-4 w-[220px]" />
-                        <Skeleton className="h-20 w-[350px]" />
-                      </div>
-                    </div>
-                  </div>
-                </ScrollArea>
+          {/* Ticket Details Skeleton */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Ticket Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
                 <div className="flex gap-2">
-                  <Skeleton className="h-[80px] flex-1" />
-                  <Skeleton className="h-[80px] w-10" />
+                  <Skeleton className="h-6 w-20" />
+                  <Skeleton className="h-6 w-24" />
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar Skeletons */}
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Customer Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <Skeleton className="h-4 w-16 mb-1" />
-                    <Skeleton className="h-5 w-[200px]" />
-                  </div>
+                <div>
+                  <Skeleton className="h-4 w-16 mb-1" />
+                  <Skeleton className="h-5 w-full" />
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Ticket Information</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
+                <div>
+                  <Skeleton className="h-4 w-20 mb-1" />
+                  <Skeleton className="h-5 w-full" />
+                  <Skeleton className="h-5 w-[90%] mt-1" />
+                  <Skeleton className="h-5 w-[80%] mt-1" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Skeleton className="h-4 w-16 mb-1" />
-                    <Skeleton className="h-5 w-[180px]" />
+                    <Skeleton className="h-4 w-14 mb-1" />
+                    <Skeleton className="h-5 w-[150px]" />
                   </div>
                   <div>
                     <Skeleton className="h-4 w-20 mb-1" />
-                    <Skeleton className="h-5 w-[160px]" />
-                  </div>
-                  <div>
-                    <Skeleton className="h-4 w-24 mb-1" />
-                    <Skeleton className="h-5 w-[140px]" />
+                    <Skeleton className="h-5 w-[150px]" />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Message History Skeleton */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex gap-4 mb-4">
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-10 w-32" />
+            </div>
+            <div className="space-y-4">
+              <Skeleton className="h-[400px] w-full rounded-lg" />
+              <div className="flex gap-2">
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-10" />
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+
+        {/* Bottom Section - Internal Notes and Tags Skeletons */}
+        <div className="grid grid-cols-2 gap-6">
+          {/* Internal Notes Skeleton */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Internal Notes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <Skeleton className="h-20 w-full" />
+                  <Skeleton className="h-20 w-10" />
+                </div>
+                <div className="space-y-3">
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tags Skeleton */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle>Tags</CardTitle>
+              <Skeleton className="h-8 w-8" />
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                <Skeleton className="h-6 w-16" />
+                <Skeleton className="h-6 w-20" />
+                <Skeleton className="h-6 w-24" />
+                <Skeleton className="h-6 w-16" />
+                <Skeleton className="h-6 w-20" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
@@ -692,14 +821,30 @@ export default function TicketDetailsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => router.push('/protected/inbox')}
+            >
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <h1 className="text-2xl font-bold">Ticket {ticket.id}</h1>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline">Update Status</Button>
-            <Button variant="default">Resolve Ticket</Button>
+            <Button 
+              variant="outline"
+              onClick={escalateTicket}
+              disabled={!ticket || ticket.priority_level === 'urgent'}
+            >
+              Escalate Ticket
+            </Button>
+            <Button 
+              variant="default"
+              onClick={resolveTicket}
+              disabled={!ticket || ticket.status === 'resolved'}
+            >
+              Resolve Ticket
+            </Button>
           </div>
         </div>
 
@@ -824,19 +969,34 @@ export default function TicketDetailsPage() {
                         </div>
                       </div>
                     ))}
+                    <div ref={messagesEndRef} />
                   </div>
                 </ScrollArea>
-                <form className="flex gap-2">
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!message.trim() || isSending) return;
+                  await sendMessage();
+                }} className="flex gap-2">
                   <Textarea
                     placeholder={ticket.assigned_to 
                       ? "Type your message..." 
                       : "Assign an agent before sending messages..."}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
                     className="min-h-[80px]"
-                    disabled={!ticket.assigned_to}
+                    disabled={!ticket.assigned_to || isSending}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!message.trim() || isSending) return;
+                        sendMessage();
+                      }
+                    }}
                   />
                   <Button 
+                    type="submit"
                     className="flex-shrink-0"
-                    disabled={!ticket.assigned_to}
+                    disabled={!ticket.assigned_to || isSending || !message.trim()}
                   >
                     <Send className="w-4 h-4" />
                   </Button>
