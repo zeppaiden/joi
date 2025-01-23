@@ -599,6 +599,12 @@ export default function TicketDetailsPage() {
                 <CardTitle>Chat</CardTitle>
               </CardHeader>
               <CardContent>
+                {!ticket.agent && (
+                  <div className="bg-destructive/10 text-destructive rounded-lg p-4 mb-4 text-sm">
+                    Please assign an agent to this ticket before sending messages.
+                    This ensures proper ticket handling and customer support.
+                  </div>
+                )}
                 <ScrollArea className="h-[400px] border rounded-lg mb-4 p-4">
                   <div className="flex flex-col space-y-4 w-full">
                     {messages.map((msg) => (
@@ -637,15 +643,18 @@ export default function TicketDetailsPage() {
                   className="flex gap-2"
                 >
                   <Textarea
-                    placeholder="Type your message..."
+                    placeholder={ticket.agent 
+                      ? "Type your message..." 
+                      : "Assign an agent before sending messages..."}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     className="min-h-[80px]"
+                    disabled={!ticket.agent}
                   />
                   <Button
                     type="submit"
                     className="flex-shrink-0"
-                    disabled={isSending || !message.trim()}
+                    disabled={isSending || !message.trim() || !ticket.agent}
                   >
                     <Send className="w-4 h-4" />
                   </Button>
