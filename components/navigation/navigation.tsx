@@ -1,13 +1,14 @@
 "use client";
 
 import React from "react";
-import { Inbox, Users, BarChart2, Settings, HelpCircle } from "lucide-react";
+import { Inbox, Users, BarChart2, Settings, HelpCircle, Building2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/protected/inbox", icon: Inbox, label: "Inbox" },
   { href: "/protected/customers", icon: Users, label: "Customers" },
+  { href: "/protected/organization", icon: Building2, label: "Organization" },
   { href: "/protected/analytics", icon: BarChart2, label: "Analytics" },
   { href: "/protected/settings", icon: Settings, label: "Settings" },
   { href: "/protected/help", icon: HelpCircle, label: "Help Center" },
