@@ -35,20 +35,87 @@ export const updateSession = async (request: NextRequest) => {
       },
     );
 
-    // IMPORTANT: Avoid writing any logic between createServerClient and
-    // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-    // issues with users being randomly logged out.
+    // IMPORTANT: Get user before any other Supabase calls
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    // This will refresh session if expired - required for Server Components
-    // https://supabase.com/docs/guides/auth/server-side/nextjs
-    const user = await supabase.auth.getUser();
-
-    // protected routes
-    if (request.nextUrl.pathname.startsWith("/protected") && user.error) {
+    // Handle auth protected routes
+    if (request.nextUrl.pathname.startsWith("/protected") && userError) {
       return NextResponse.redirect(new URL("/sign-in", request.url));
     }
 
-    if (request.nextUrl.pathname === "/" && !user.error) {
+    // If user is authenticated, check registration status
+    if (user && !userError) {
+      // Skip registration check for auth and api routes
+      if (
+        !request.nextUrl.pathname.startsWith("/sign-") &&
+        !request.nextUrl.pathname.startsWith("/api/")
+      ) {
+        // Check if user exists in our database and get their role
+        const { data: dbUser } = await supabase
+          .from("users")
+          .select("id, role")
+          .eq("id", user.id)
+          .single();
+
+        // User is authenticated but not registered
+        if (!dbUser) {
+          // Allow access to registration
+          if (request.nextUrl.pathname === "/register") {
+            return response;
+          }
+          // Redirect to registration for all other routes
+          return NextResponse.redirect(new URL("/register", request.url));
+        }
+
+        // If user is an admin, check if they have an organization
+        if (dbUser.role === "admin") {
+          const { data: org } = await supabase
+            .from("organizations")
+            .select("id")
+            .eq("admin_id", user.id)
+            .single();
+
+          // Admin without organization needs to complete registration
+          if (!org) {
+            // Allow access to registration
+            if (request.nextUrl.pathname === "/register") {
+              return response;
+            }
+            // Redirect to registration for all other routes
+            return NextResponse.redirect(new URL("/register", request.url));
+          }
+        }
+        // If user is an agent, check if they're part of an organization
+        else if (dbUser.role === "agent") {
+          const { data: membership } = await supabase
+            .from("organization_members")
+            .select("id")
+            .eq("user_id", user.id)
+            .single();
+
+          // Agent without organization needs to complete registration
+          if (!membership) {
+            // Allow access to registration
+            if (request.nextUrl.pathname === "/register") {
+              return response;
+            }
+            // Redirect to registration for all other routes
+            return NextResponse.redirect(new URL("/register", request.url));
+          }
+        }
+
+        // User is registered but trying to access registration
+        if (request.nextUrl.pathname === "/register") {
+          return NextResponse.redirect(new URL("/protected/inbox", request.url));
+        }
+      }
+    }
+
+    // Handle root redirect for authenticated users
+    if (request.nextUrl.pathname === "/" && !userError) {
       return NextResponse.redirect(new URL("/protected", request.url));
     }
 
@@ -70,6 +137,7 @@ export const updateSession = async (request: NextRequest) => {
     // If you are here, a Supabase client could not be created!
     // This is likely because you have not set up environment variables.
     // Check out http://localhost:3000 for Next Steps.
+    console.error("Middleware error:", e);
     return NextResponse.next({
       request: {
         headers: request.headers,
