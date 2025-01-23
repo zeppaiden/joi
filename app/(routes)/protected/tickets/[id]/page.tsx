@@ -62,14 +62,14 @@ type Params = {
   id: string;
 };
 
-const DEFAULT_TAGS = [
-  { id: 'default-bug', name: 'bug' },
-  { id: 'default-payment', name: 'payment processing' },
-  { id: 'default-feature', name: 'feature request' },
-  { id: 'default-account', name: 'account access' },
-  { id: 'default-technical', name: 'technical support' },
-  { id: 'default-billing', name: 'billing' },
-];
+const TAG_COLORS: Record<string, { bg: string, text: string, hover: string }> = {
+  'Bug': { bg: 'bg-red-100', text: 'text-red-700', hover: 'hover:bg-red-200' },
+  'Payment Processing': { bg: 'bg-blue-100', text: 'text-blue-700', hover: 'hover:bg-blue-200' },
+  'Feature Request': { bg: 'bg-green-100', text: 'text-green-700', hover: 'hover:bg-green-200' },
+  'Account Access': { bg: 'bg-yellow-100', text: 'text-yellow-700', hover: 'hover:bg-yellow-200' },
+  'Technical Support': { bg: 'bg-purple-100', text: 'text-purple-700', hover: 'hover:bg-purple-200' },
+  'Billing': { bg: 'bg-orange-100', text: 'text-orange-700', hover: 'hover:bg-orange-200' },
+};
 
 export default function TicketDetailsPage() {
   const router = useRouter();
@@ -133,15 +133,24 @@ export default function TicketDetailsPage() {
           .order('name');
 
         // Get ticket's tags
-        const { data: ticketTagsData } = await supabase
+        const { data: ticketTagsData, error: ticketTagsError } = await supabase
           .from('ticket_tags')
           .select(`
-            tag:tags(*)
+            tags (
+              id,
+              name,
+              created_at,
+              created_by
+            )
           `)
           .eq('ticket_id', id);
 
-        // Extract the tags from the join query
-        const ticketTags = ticketTagsData?.map(tt => tt.tag) || [];
+        if (ticketTagsError) throw ticketTagsError;
+
+        // Extract the tags from the join query and filter out any null values
+        const ticketTags = ticketTagsData
+          ?.map(tt => tt.tags)
+          .filter((tag): tag is Tag => tag !== null) || [];
 
         // Get internal notes
         const { data: notesData, error: notesError } = await supabase
@@ -289,10 +298,14 @@ export default function TicketDetailsPage() {
   };
 
   // Create new tag
-  const createTag = async () => {
-    if (!newTagName.trim()) return;
-
+  const createTag = async (name: string) => {
     try {
+      // Check if this is a template tag and use its exact casing
+      const templateTag = Object.keys(TAG_COLORS).find(
+        tagName => tagName.toLowerCase() === name.toLowerCase()
+      );
+      const tagName = templateTag || name.trim();
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
@@ -300,9 +313,9 @@ export default function TicketDetailsPage() {
       const { data: existingTag } = await supabase
         .from('tags')
         .select('*')
-        .eq('name', newTagName.trim())
+        .eq('name', tagName)
         .is('deleted_at', null)
-        .maybeSingle();  // Use maybeSingle instead of single to avoid error if no match
+        .maybeSingle();
 
       if (existingTag) {
         // Check if this existing tag is already on the ticket
@@ -327,16 +340,13 @@ export default function TicketDetailsPage() {
       const { data: tag, error } = await supabase
         .from('tags')
         .insert({
-          name: newTagName.trim(),
+          name: tagName,
           created_by: user.id,
         })
         .select()
         .single();
 
-      if (error) {
-        console.error('Error creating tag:', error);
-        throw error;
-      }
+      if (error) throw error;
 
       // Update local state
       setTags(prev => [...prev, tag]);
@@ -344,6 +354,11 @@ export default function TicketDetailsPage() {
       
       // Add new tag to ticket
       await addTagToTicket(tag.id);
+      
+      toast({
+        title: "Success",
+        description: "Tag created and added to ticket",
+      });
     } catch (error) {
       console.error('Error creating tag:', error);
       toast({
@@ -389,42 +404,29 @@ export default function TicketDetailsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // First check if the tag is already added to the ticket
-      const { data: existingTicketTag } = await supabase
-        .from('ticket_tags')
-        .select('*')
-        .eq('ticket_id', id)
-        .eq('tag_id', tagId)
-        .single();
-
-      if (existingTicketTag) {
-        toast({
-          title: "Tag already added",
-          description: "This tag is already on the ticket",
-          variant: "default",
-        });
-        return;
-      }
-
-      const { data: _data, error } = await supabase
+      const { error } = await supabase
         .from('ticket_tags')
         .insert({
           ticket_id: id,
           tag_id: tagId,
           created_by: user.id,
-        })
-        .select()
-        .single();
+        });
 
       if (error) throw error;
 
-      const newTag = tags.find(t => t.id === tagId);
-      if (newTag) {
-        setTicketTags(prev => [...prev, newTag]);
+      // Get the tag details
+      const { data: tag } = await supabase
+        .from('tags')
+        .select('*')
+        .eq('id', tagId)
+        .single();
+
+      if (tag) {
+        setTicketTags(prev => [...prev, tag]);
+        setIsTagDialogOpen(false);
         toast({
           title: "Success",
-          description: "Tag added successfully",
-          variant: "default",
+          description: "Tag added to ticket",
         });
       }
     } catch (error) {
@@ -815,7 +817,11 @@ export default function TicketDetailsPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle>Tags</CardTitle>
-              <Button variant="outline" size="sm">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsTagDialogOpen(true)}
+              >
                 <Plus className="w-4 h-4" />
               </Button>
             </CardHeader>
@@ -830,22 +836,32 @@ export default function TicketDetailsPage() {
                     <Badge
                       key={tag.id}
                       variant="secondary"
-                      className="flex items-center gap-1 group relative pr-6"
+                      className={cn(
+                        "flex items-center gap-1 group relative pr-6",
+                        // Find matching template tag (case-insensitive)
+                        Object.entries(TAG_COLORS).find(
+                          ([name]) => name.toLowerCase() === tag.name.toLowerCase()
+                        )
+                          ? cn(
+                              Object.entries(TAG_COLORS).find(
+                                ([name]) => name.toLowerCase() === tag.name.toLowerCase()
+                              )![1].bg,
+                              Object.entries(TAG_COLORS).find(
+                                ([name]) => name.toLowerCase() === tag.name.toLowerCase()
+                              )![1].text,
+                              Object.entries(TAG_COLORS).find(
+                                ([name]) => name.toLowerCase() === tag.name.toLowerCase()
+                              )![1].hover
+                            )
+                          : "bg-secondary hover:bg-secondary/80" // Default style for custom tags
+                      )}
                     >
                       {tag.name}
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-4 w-4 p-0 absolute right-1 opacity-70 hover:opacity-100"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const shouldDelete = window.confirm('Do you want to delete this tag completely? Click Cancel to just remove it from this ticket.');
-                          if (shouldDelete) {
-                            deleteTag(tag.id);
-                          } else {
-                            removeTagFromTicket(tag.id);
-                          }
-                        }}
+                        onClick={() => removeTagFromTicket(tag.id)}
                       >
                         <X className="w-3 h-3" />
                       </Button>
@@ -861,86 +877,73 @@ export default function TicketDetailsPage() {
       {/* Tag Selection Dialog */}
       <CommandDialog modal open={isTagDialogOpen} onOpenChange={setIsTagDialogOpen}>
         <Command shouldFilter={false} className="rounded-lg border shadow-md">
-          <CommandInput 
-            autoFocus
-            placeholder="Search tags or create new..." 
-            value={newTagName} 
-            onValueChange={setNewTagName} 
-          />
+          <div className="border-b px-3 py-2">
+            <h2 className="text-sm font-medium">Add Tag</h2>
+          </div>
+          <div className="p-2">
+            <div className="flex gap-2">
+              <input
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Type to create a custom tag..."
+                value={newTagName}
+                onChange={(e) => setNewTagName(e.target.value)}
+                onKeyDown={(e) => {
+                  // Prevent the Command component from handling the Enter key
+                  e.stopPropagation();
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={!newTagName.trim()}
+                onClick={() => {
+                  if (newTagName.trim()) {
+                    createTag(newTagName);
+                    setIsTagDialogOpen(false);
+                  }
+                }}
+              >
+                Create
+              </Button>
+            </div>
+          </div>
+          <div className="px-2 pb-2">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">
+                  or choose from template tags
+                </span>
+              </div>
+            </div>
+          </div>
           <CommandList>
-            {newTagName.trim() && (
-              <CommandEmpty>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={createTag}
-                >
-                  Create tag "{newTagName}"
-                </Button>
-              </CommandEmpty>
-            )}
-            <CommandGroup heading="Common Tags">
-              {DEFAULT_TAGS
-                .filter(tag => !ticketTags.some(t => t.name.toLowerCase() === tag.name.toLowerCase()))
-                .map((tag) => (
+            <CommandGroup>
+              {Object.entries(TAG_COLORS)
+                .filter(([name]) => !ticketTags.some(t => t.name.toLowerCase() === name.toLowerCase()))
+                .map(([name, { bg, text }]) => (
                   <CommandItem
-                    key={tag.id}
-                    value={tag.name}
-                    onSelect={async () => {
-                      // Create the tag if it doesn't exist
-                      const { data: { user } } = await supabase.auth.getUser();
-                      if (!user) return;
-
-                      const { data: existingTag } = await supabase
-                        .from('tags')
-                        .select('*')
-                        .eq('name', tag.name)
-                        .is('deleted_at', null)
-                        .maybeSingle();
-
-                      if (existingTag) {
-                        await addTagToTicket(existingTag.id);
-                      } else {
-                        const { data: newTag, error } = await supabase
-                          .from('tags')
-                          .insert({
-                            name: tag.name,
-                            created_by: user.id,
-                          })
-                          .select()
-                          .single();
-
-                        if (!error && newTag) {
-                          setTags(prev => [...prev, newTag]);
-                          await addTagToTicket(newTag.id);
-                        }
-                      }
+                    key={name}
+                    value={name}
+                    onSelect={() => {
+                      createTag(name);
                       setIsTagDialogOpen(false);
                     }}
+                    className={cn(
+                      "flex items-center gap-2",
+                      text
+                    )}
                   >
-                    {tag.name}
+                    <div className={cn(
+                      "w-2 h-2 rounded-full",
+                      bg
+                    )} />
+                    {name}
                   </CommandItem>
                 ))}
             </CommandGroup>
-            {tags.length > 0 && (
-              <CommandGroup heading="Custom Tags">
-                {tags
-                  .filter(tag => !ticketTags.some(t => t.id === tag.id))
-                  .filter(tag => !DEFAULT_TAGS.some(d => d.name.toLowerCase() === tag.name.toLowerCase()))
-                  .map((tag) => (
-                    <CommandItem
-                      key={tag.id}
-                      value={tag.name}
-                      onSelect={() => {
-                        addTagToTicket(tag.id);
-                        setIsTagDialogOpen(false);
-                      }}
-                    >
-                      {tag.name}
-                    </CommandItem>
-                  ))}
-              </CommandGroup>
-            )}
           </CommandList>
         </Command>
       </CommandDialog>
