@@ -195,9 +195,21 @@ export async function POST(req: Request) {
           }
         }
       }
+
+      return NextResponse.json({ 
+        success: true,
+        redirectTo: '/protected/inbox'
+      });
+    }
+    else if (role === 'customer') {
+      console.log('Processing customer registration');
+      return NextResponse.json({ 
+        success: true,
+        redirectTo: '/protected/customer-portal'
+      });
     }
 
-    // Default redirect for non-admin roles
+    // Default redirect for unhandled cases
     return NextResponse.json({ 
       success: true,
       redirectTo: '/protected/inbox'

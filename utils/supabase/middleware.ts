@@ -109,14 +109,26 @@ export const updateSession = async (request: NextRequest) => {
 
         // User is registered but trying to access registration
         if (request.nextUrl.pathname === "/register") {
-          return NextResponse.redirect(new URL("/protected/inbox", request.url));
+          // Redirect customers to customer portal, others to inbox
+          const redirectPath = dbUser.role === "customer" 
+            ? "/protected/customer-portal" 
+            : "/protected/inbox";
+          return NextResponse.redirect(new URL(redirectPath, request.url));
+        }
+
+        // Handle root redirect for registered users
+        if (request.nextUrl.pathname === "/") {
+          const redirectPath = dbUser.role === "customer" 
+            ? "/protected/customer-portal" 
+            : "/protected/inbox";
+          return NextResponse.redirect(new URL(redirectPath, request.url));
         }
       }
     }
 
-    // Handle root redirect for authenticated users
+    // Handle root redirect for authenticated but unregistered users
     if (request.nextUrl.pathname === "/" && !userError) {
-      return NextResponse.redirect(new URL("/protected", request.url));
+      return NextResponse.redirect(new URL("/register", request.url));
     }
 
     // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
