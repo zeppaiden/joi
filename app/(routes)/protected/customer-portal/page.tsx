@@ -11,7 +11,7 @@ export default async function CustomerPortalPage() {
   // Get current user
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
-    redirect("/login");
+    redirect("/sign-in");
   }
 
   // Get organizations the customer has access to

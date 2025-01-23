@@ -1,15 +1,19 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Search, Bell, Menu } from "lucide-react";
+import { Search, Bell, Menu, LogOut } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/utils/supabase/client";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
+  const { toast } = useToast();
 
   // Update URL with debounced search query
   const debouncedUpdateUrl = useDebouncedCallback((value: string) => {
@@ -26,6 +30,24 @@ export function Header() {
   useEffect(() => {
     setSearchQuery(searchParams.get("q") || "");
   }, [searchParams]);
+
+  const handleLogout = async () => {
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      toast({
+        title: "Success",
+        description: "Logged out successfully",
+      });
+      router.push('/sign-in');
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to log out",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <header className="border-b">
@@ -54,9 +76,15 @@ export function Header() {
               <Bell className="w-6 h-6" />
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
-            <div className="h-8 w-8 rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium">JD</span>
-            </div>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={handleLogout}
+              className="hover:bg-destructive/10"
+            >
+              <LogOut className="w-5 h-5 text-foreground hover:text-destructive transition-colors" />
+              <span className="sr-only">Log out</span>
+            </Button>
           </div>
         </div>
       </div>
