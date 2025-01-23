@@ -15,34 +15,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 // Memoized ticket row component
 const TicketRow = memo(({ ticket }: { ticket: TicketWithComputed }) => (
   <div className="px-6 py-4 hover:bg-muted/50 transition-colors">
-    <div className="flex items-center justify-between">
-      <div className="flex items-center space-x-4">
-        <div className="flex-shrink-0">
-          <div className={`h-10 w-10 rounded-full flex items-center justify-center border ${
-            ticket.isOverdue ? 'border-destructive' : ''
-          }`}>
-            <span className="text-sm font-medium">
-              {ticket.created_by.substring(0, 2).toUpperCase()}
-            </span>
-          </div>
-        </div>
-        <div>
-          <h3 className="text-sm font-medium">{ticket.title}</h3>
-          <p className="text-sm text-muted-foreground">
-            {ticket.created_by} • {ticket.timeElapsed}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center space-x-2">
-        {ticket.isOverdue && (
-          <Badge variant="destructive">Overdue</Badge>
-        )}
+    <div className="flex items-center gap-4">
+      {/* Priority and Status Badges */}
+      <div className="flex items-center gap-2 w-48">
         <Badge variant={
           ticket.priority_level === "high" ? "destructive" :
           ticket.priority_level === "medium" ? "secondary" : "default"
         }>
           {ticket.priority_level || "none"}
         </Badge>
+        {ticket.isOverdue && (
+          <Badge variant="destructive">Overdue</Badge>
+        )}
         <Badge variant={
           ticket.status === "open" ? "default" :
           ticket.status === "in_progress" ? "secondary" :
@@ -50,6 +34,28 @@ const TicketRow = memo(({ ticket }: { ticket: TicketWithComputed }) => (
         }>
           {ticket.status || "none"}
         </Badge>
+      </div>
+
+      {/* Ticket Title and Description */}
+      <div className="flex-1">
+        <h3 className="text-sm font-medium">{ticket.title}</h3>
+        <p className="text-sm text-muted-foreground">
+          Created {ticket.timeElapsed}
+        </p>
+      </div>
+
+      {/* Ticket Creator */}
+      <div className="flex items-center gap-2 w-48">
+        <div className={`h-8 w-8 rounded-full flex items-center justify-center border ${
+          ticket.isOverdue ? 'border-destructive' : ''
+        }`}>
+          <span className="text-sm font-medium">
+            {ticket.created_by.substring(0, 2).toUpperCase()}
+          </span>
+        </div>
+        <span className="text-sm text-muted-foreground truncate">
+          {ticket.created_by}
+        </span>
       </div>
     </div>
   </div>
@@ -248,80 +254,94 @@ export function TicketDashboard() {
   }
 
   return (
-    <div className="relative">
-      <Card>
-        <div className="p-6 border-b">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-medium">Tickets</h2>
-            {isRefreshing && (
-              <div className="flex items-center text-muted-foreground">
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Refreshing...
-              </div>
-            )}
-          </div>
-          
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => toggleFilter("priority", "high")}
-              className={getFilterButtonStyle("priority", "high")}
-            >
-              <AlertCircle className="w-4 h-4 mr-1.5" />
-              High Priority
-            </button>
-            <button
-              onClick={() => toggleFilter("priority", "medium")}
-              className={getFilterButtonStyle("priority", "medium")}
-            >
-              <AlertTriangle className="w-4 h-4 mr-1.5" />
-              Medium Priority
-            </button>
-            <button
-              onClick={() => toggleFilter("status", "open")}
-              className={getFilterButtonStyle("status", "open")}
-            >
-              Open
-            </button>
-            <button
-              onClick={() => toggleFilter("status", "in_progress")}
-              className={getFilterButtonStyle("status", "in_progress")}
-            >
-              In Progress
-            </button>
-          </div>
-        </div>
-
-        <div ref={parentRef} className="divide-y max-h-[600px] overflow-auto">
-          {tickets.length === 0 ? (
-            <div className="p-6 text-center text-muted-foreground">
-              No tickets found
-            </div>
-          ) : (
-            <div
-              style={{
-                height: `${rowVirtualizer.getTotalSize()}px`,
-                width: "100%",
-                position: "relative",
-              }}
-            >
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => (
-                <div
-                  key={tickets[virtualRow.index].id}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${virtualRow.start}px)`,
-                  }}
-                >
-                  <TicketRow ticket={tickets[virtualRow.index]} />
-                </div>
-              ))}
+    <Card>
+      {/* Filters Section */}
+      <div className="p-6 border-b">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-semibold">Tickets</h2>
+          {isRefreshing && (
+            <div className="flex items-center text-muted-foreground">
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Refreshing...
             </div>
           )}
         </div>
-      </Card>
-    </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setFilters(prev => ({ ...prev, assignedToMe: !prev.assignedToMe }))}
+            className={`flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              filters.assignedToMe ? "bg-secondary" : "bg-muted text-muted-foreground"
+            }`}
+          >
+            Assigned to me
+          </button>
+          {["open", "in_progress", "closed"].map(status => (
+            <button
+              key={status}
+              onClick={() => toggleFilter("status", status)}
+              className={getFilterButtonStyle("status", status)}
+            >
+              {status.replace("_", " ")}
+            </button>
+          ))}
+          {["low", "medium", "high"].map(priority => (
+            <button
+              key={priority}
+              onClick={() => toggleFilter("priority", priority)}
+              className={getFilterButtonStyle("priority", priority)}
+            >
+              {priority}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Table Headers */}
+      <div className="px-6 py-3 border-b bg-muted/50">
+        <div className="flex items-center gap-4">
+          <div className="w-48 text-sm font-medium text-muted-foreground">Status & Priority</div>
+          <div className="flex-1 text-sm font-medium text-muted-foreground">Ticket Details</div>
+          <div className="w-48 text-sm font-medium text-muted-foreground">Created By</div>
+        </div>
+      </div>
+
+      {/* Tickets List */}
+      <div
+        ref={parentRef}
+        className="divide-y max-h-[600px] overflow-auto"
+      >
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => (
+            <div
+              key={virtualRow.index}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: `${virtualRow.size}px`,
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              <TicketRow ticket={tickets[virtualRow.index]} />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Empty State */}
+      {tickets.length === 0 && (
+        <div className="p-6 text-center text-muted-foreground">
+          <AlertCircle className="w-6 h-6 mx-auto mb-2" />
+          <p>No tickets found</p>
+        </div>
+      )}
+    </Card>
   );
 }

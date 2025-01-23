@@ -38,13 +38,18 @@ import { Badge } from "@/components/ui/badge";
 import { Database } from "@/types/supabase";
 import { Skeleton } from "@/components/ui/skeleton";
 
+type OrganizationMember = Database["public"]["Tables"]["organization_members"]["Row"];
+type Organization = Database["public"]["Tables"]["organizations"]["Row"];
+
 type User = Database["public"]["Tables"]["users"]["Row"] & {
   role: 'admin' | 'agent' | 'customer';
+  organization_members?: OrganizationMember[];
 };
 
 type Ticket = Database["public"]["Tables"]["tickets"]["Row"] & {
   status: 'open' | 'in_progress' | 'resolved' | 'closed';
   priority_level: 'low' | 'medium' | 'high' | 'urgent';
+  organizations?: Organization;
 };
 
 export function AdminTicketManagement() {
@@ -63,12 +68,52 @@ export function AdminTicketManagement() {
   const loadData = useCallback(async () => {
     const supabase = createClient();
     const searchQuery = searchParams.get("q")?.toLowerCase() || "";
+
+    // First, get the organization
+    const { data: orgData } = await supabase
+      .from('organizations')
+      .select('id')
+      .is('deleted_at', null)
+      .single();
+
+    if (orgData) {
+      // Update tickets with null organization_id
+      const { data: ticketsToUpdate } = await supabase
+        .from('tickets')
+        .select('id')
+        .is('organization_id', null)
+        .is('deleted_at', null);
+
+      if (ticketsToUpdate && ticketsToUpdate.length > 0) {
+        console.log('Updating tickets with organization ID:', {
+          organizationId: orgData.id,
+          ticketCount: ticketsToUpdate.length
+        });
+
+        const { error: updateError } = await supabase
+          .from('tickets')
+          .update({ organization_id: orgData.id })
+          .is('organization_id', null)
+          .is('deleted_at', null);
+
+        if (updateError) {
+          console.error('Error updating tickets:', updateError);
+        } else {
+          console.log('Successfully updated tickets with organization ID');
+        }
+      }
+    }
     
-    // Get agents
+    // Get agents and admins with their organization memberships
     const { data: agentsData } = await supabase
       .from('users')
-      .select('*')
-      .eq('role', 'agent')
+      .select(`
+        *,
+        organization_members!inner(
+          organization_id
+        )
+      `)
+      .in('role', ['agent', 'admin'])
       .is('deleted_at', null);
     
     // Get active customers
@@ -78,10 +123,16 @@ export function AdminTicketManagement() {
       .eq('role', 'customer')
       .is('deleted_at', null);
 
-    // Get tickets with search
+    // Get tickets with their organization info
     let ticketsQuery = supabase
       .from('tickets')
-      .select('*')
+      .select(`
+        *,
+        organizations (
+          id,
+          name
+        )
+      `)
       .is('deleted_at', null);
     
     // Apply search filter if query exists
@@ -105,32 +156,71 @@ export function AdminTicketManagement() {
   const createTicket = async (formData: FormData) => {
     setIsLoading(true);
     try {
+      console.log('Starting ticket creation process');
       const supabase = createClient();
       
       // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        console.error('Error getting current user:', userError);
+        throw userError;
+      }
       if (!user) throw new Error("Not authenticated");
+
+      // Get organization
+      const { data: orgData, error: orgError } = await supabase
+        .from('organizations')
+        .select('id')
+        .is('deleted_at', null)
+        .single();
+
+      if (orgError) {
+        console.error('Error getting organization:', orgError);
+        throw orgError;
+      }
+      if (!orgData) throw new Error("No organization found");
 
       const ticketId = crypto.randomUUID();
       const customerId = formData.get('customer_id');
       const assignedTo = formData.get('assigned_to');
       const status = formData.get('status') || 'open';
       const priority = formData.get('priority') || 'low';
+      const title = formData.get('title');
+      const description = formData.get('description');
+
+      console.log('Collected form data:', {
+        ticketId,
+        customerId,
+        assignedTo,
+        status,
+        priority,
+        title,
+        description,
+        organizationId: orgData.id,
+        createdBy: user.id
+      });
 
       if (!customerId) throw new Error("Customer is required");
+      if (!title) throw new Error("Title is required");
 
-      const { error } = await supabase.from('tickets').insert({
+      const { data, error } = await supabase.from('tickets').insert({
         id: ticketId,
-        title: formData.get('title') as string,
-        description: formData.get('description') as string,
+        title: title as string,
+        description: description as string,
         status: status as Ticket['status'],
         priority_level: priority as Ticket['priority_level'],
         created_by: user.id,
         assigned_to: assignedTo ? (assignedTo as string) : null,
         customer_id: customerId as string,
-      });
+        organization_id: orgData.id
+      }).select().single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error creating ticket:', error);
+        throw error;
+      }
+
+      console.log('Ticket created successfully:', data);
 
       toast({
         title: "Success",
@@ -155,13 +245,30 @@ export function AdminTicketManagement() {
   const updateTicket = async (ticketId: string, updates: Partial<Ticket>) => {
     setIsLoading(true);
     try {
+      console.log('Updating ticket:', { ticketId, updates });
       const supabase = createClient();
-      const { error } = await supabase
+      
+      // Validate the updates
+      if ('assigned_to' in updates) {
+        console.log('Updating ticket assignment:', {
+          currentValue: tickets.find(t => t.id === ticketId)?.assigned_to,
+          newValue: updates.assigned_to
+        });
+      }
+
+      const { data, error } = await supabase
         .from('tickets')
         .update(updates)
-        .eq('id', ticketId);
+        .eq('id', ticketId)
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error updating ticket:', error);
+        throw error;
+      }
+
+      console.log('Ticket updated successfully:', data);
 
       toast({
         title: "Success",
@@ -170,9 +277,12 @@ export function AdminTicketManagement() {
       
       loadData();
     } catch (error) {
+      console.error('Failed to update ticket:', error);
       toast({
         title: "Error",
-        description: "Failed to update ticket",
+        description: error instanceof Error 
+          ? `Failed to update ticket: ${error.message}`
+          : "Failed to update ticket",
         variant: "destructive",
       });
     } finally {
@@ -222,60 +332,108 @@ export function AdminTicketManagement() {
 
       {/* Tickets List */}
       <Card>
+        {/* Table Headers */}
+        <div className="px-6 py-3 border-b bg-muted/50">
+          <div className="grid grid-cols-12 gap-4">
+            <div className="col-span-5 text-sm font-medium text-muted-foreground">Ticket Details</div>
+            <div className="col-span-2 text-sm font-medium text-muted-foreground">Status</div>
+            <div className="col-span-2 text-sm font-medium text-muted-foreground">Priority</div>
+            <div className="col-span-2 text-sm font-medium text-muted-foreground">Customer</div>
+            <div className="col-span-1 text-sm font-medium text-muted-foreground text-right">Actions</div>
+          </div>
+        </div>
+
         <div className="divide-y">
           {tickets.map((ticket) => (
             <div 
               key={ticket.id} 
-              className="p-4 hover:bg-muted/50 transition-colors"
+              className="px-6 py-4 hover:bg-muted/50 transition-colors"
             >
-              <div className="flex items-center justify-between">
+              <div className="grid grid-cols-12 gap-4 items-center">
+                {/* Ticket Title and Description */}
                 <div 
-                  className="flex-1 space-y-1 cursor-pointer"
+                  className="col-span-5 space-y-1 cursor-pointer"
                   onClick={() => router.push(`/protected/tickets/${ticket.id}`)}
                 >
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-medium">{ticket.title}</h3>
-                    <Badge variant={
-                      ticket.priority_level === "urgent" ? "destructive" :
-                      ticket.priority_level === "high" ? "destructive" :
-                      ticket.priority_level === "medium" ? "secondary" :
-                      "default"
-                    }>
-                      {ticket.priority_level}
-                    </Badge>
-                    <Badge variant={
-                      ticket.status === "open" ? "default" :
-                      ticket.status === "in_progress" ? "secondary" :
-                      ticket.status === "resolved" ? "secondary" :
-                      "outline"
-                    }>
-                      {ticket.status}
-                    </Badge>
+                  <h3 className="font-medium truncate">{ticket.title}</h3>
+                  <p className="text-sm text-muted-foreground truncate">
+                    {ticket.description}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Select
+                      value={ticket.assigned_to || "unassigned"}
+                      onValueChange={(value) => {
+                        console.log('Assigning ticket:', {
+                          ticketId: ticket.id,
+                          currentAssignee: ticket.assigned_to,
+                          newAssignee: value
+                        });
+                        updateTicket(ticket.id, { 
+                          assigned_to: value === "unassigned" ? null : value 
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs w-[200px]">
+                        <SelectValue placeholder="Assign agent">
+                          {ticket.assigned_to 
+                            ? agents.find(a => a.id === ticket.assigned_to)?.email || 'Unknown Agent'
+                            : 'Unassigned'
+                          }
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        {(() => {
+                          console.log('Ticket organization:', {
+                            ticketId: ticket.id,
+                            organizationId: ticket.organization_id,
+                            organizations: ticket.organizations
+                          });
+                          console.log('Available agents:', agents.map(a => ({
+                            email: a.email,
+                            role: a.role,
+                            orgMembers: a.organization_members
+                          })));
+                          
+                          const filteredAgents = agents.filter(agent => {
+                            const isMember = agent.organization_members?.some(
+                              (member: OrganizationMember) => member.organization_id === ticket.organization_id
+                            );
+                            console.log('Agent membership check:', {
+                              email: agent.email,
+                              role: agent.role,
+                              isMember,
+                              orgMembers: agent.organization_members,
+                              ticketOrgId: ticket.organization_id
+                            });
+                            return isMember;
+                          });
+
+                          console.log('Filtered agents:', filteredAgents.map(a => ({
+                            email: a.email,
+                            role: a.role
+                          })));
+
+                          return filteredAgents.map((agent) => (
+                            <SelectItem key={agent.id} value={agent.id}>
+                              {agent.email} ({agent.role})
+                            </SelectItem>
+                          ));
+                        })()}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <p className="text-sm text-muted-foreground">{ticket.description}</p>
                 </div>
-                <div className="flex items-center gap-2 ml-4">
-                  <Select
-                    value={ticket.assigned_to || "unassigned"}
-                    onValueChange={(value) => updateTicket(ticket.id, { assigned_to: value === "unassigned" ? null : value })}
-                  >
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Assign to agent" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="unassigned">Unassigned</SelectItem>
-                      {agents.map((agent) => (
-                        <SelectItem key={agent.id} value={agent.id}>
-                          {agent.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+
+                {/* Status Select */}
+                <div className="col-span-2">
                   <Select
                     value={ticket.status}
-                    onValueChange={(value) => updateTicket(ticket.id, { status: value as Ticket['status'] })}
+                    onValueChange={(value) => updateTicket(ticket.id, { 
+                      status: value as Ticket['status'] 
+                    })}
                   >
-                    <SelectTrigger className="w-[150px]">
+                    <SelectTrigger className="h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -285,11 +443,21 @@ export function AdminTicketManagement() {
                       <SelectItem value="closed">Closed</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Priority Select */}
+                <div className="col-span-2">
                   <Select
                     value={ticket.priority_level}
-                    onValueChange={(value) => updateTicket(ticket.id, { priority_level: value as Ticket['priority_level'] })}
+                    onValueChange={(value) => updateTicket(ticket.id, { 
+                      priority_level: value as Ticket['priority_level'] 
+                    })}
                   >
-                    <SelectTrigger className="w-[120px]">
+                    <SelectTrigger className={`h-9 ${
+                      ticket.priority_level === "urgent" || ticket.priority_level === "high"
+                        ? "text-destructive border-destructive"
+                        : ""
+                    }`}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -299,53 +467,40 @@ export function AdminTicketManagement() {
                       <SelectItem value="urgent">Urgent</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Customer Info */}
+                <div className="col-span-2">
+                  <span className="text-sm truncate block">
+                    {customers.find(c => c.id === ticket.customer_id)?.email || 'Unknown'}
+                  </span>
+                </div>
+
+                {/* Actions */}
+                <div className="col-span-1 flex justify-end">
                   <Button
-                    variant="destructive"
+                    variant="ghost"
                     size="icon"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setSelectedTicket(ticket);
                       setIsDeleteDialogOpen(true);
                     }}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-4 h-4 text-muted-foreground hover:text-destructive" />
                   </Button>
                 </div>
               </div>
             </div>
           ))}
-          {isLoading && (
-            <>
-              <div className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-2">
-                    <Skeleton className="h-5 w-[250px]" />
-                    <Skeleton className="h-4 w-[350px]" />
-                  </div>
-                  <div className="flex gap-2">
-                    <Skeleton className="h-10 w-[200px]" />
-                    <Skeleton className="h-10 w-[150px]" />
-                    <Skeleton className="h-10 w-[120px]" />
-                    <Skeleton className="h-10 w-10" />
-                  </div>
-                </div>
-              </div>
-              <div className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-2">
-                    <Skeleton className="h-5 w-[200px]" />
-                    <Skeleton className="h-4 w-[300px]" />
-                  </div>
-                  <div className="flex gap-2">
-                    <Skeleton className="h-10 w-[200px]" />
-                    <Skeleton className="h-10 w-[150px]" />
-                    <Skeleton className="h-10 w-[120px]" />
-                    <Skeleton className="h-10 w-10" />
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
         </div>
+
+        {/* Empty State */}
+        {tickets.length === 0 && (
+          <div className="p-6 text-center text-muted-foreground">
+            No tickets found
+          </div>
+        )}
       </Card>
 
       {/* Create Ticket Dialog */}
