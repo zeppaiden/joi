@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Filter, ArrowUpDown, X, ArrowUp, ArrowDown, ListChecks, Paperclip } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,10 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Database } from "@/types/supabase";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 type OrganizationMember = Database["public"]["Tables"]["organization_members"]["Row"];
 type Organization = Database["public"]["Tables"]["organizations"]["Row"];
@@ -52,17 +56,64 @@ type Ticket = Database["public"]["Tables"]["tickets"]["Row"] & {
   organizations?: Organization;
 };
 
+type SortConfig = {
+  column: keyof Ticket | "";
+  direction: number;  // 1 for ascending, -1 for descending
+};
+
+type FilterConfig = {
+  status: string[];
+  priority: string[];
+  dateRange: {
+    from: Date | undefined;
+    to: Date | undefined;
+  };
+  assignedToFilter: "all" | "assigned" | "unassigned";
+  customerFilter: string;
+};
+
+// Priority order map for sorting
+const PRIORITY_ORDER = {
+  low: 0,
+  medium: 1,
+  high: 2,
+  urgent: 3
+};
+
+// Status order map for sorting
+const STATUS_ORDER = {
+  closed: 0,
+  resolved: 1,
+  in_progress: 2,
+  open: 3
+};
+
 export function AdminTicketManagement() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [agents, setAgents] = useState<User[]>([]);
   const [customers, setCustomers] = useState<User[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    column: "",
+    direction: 1
+  });
+  const [filterConfig, setFilterConfig] = useState<FilterConfig>({
+    status: [],
+    priority: [],
+    dateRange: {
+      from: undefined,
+      to: undefined,
+    },
+    assignedToFilter: "all",
+    customerFilter: "all",
+  });
 
   // Load users and tickets
   const loadData = useCallback(async () => {
@@ -151,6 +202,100 @@ export function AdminTicketManagement() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Apply filters and sorting to tickets
+  const filteredAndSortedTickets = useCallback(() => {
+    let filtered = [...tickets];
+
+    // Apply status filter
+    if (filterConfig.status.length > 0) {
+      filtered = filtered.filter(ticket => filterConfig.status.includes(ticket.status));
+    }
+
+    // Apply priority filter
+    if (filterConfig.priority.length > 0) {
+      filtered = filtered.filter(ticket => filterConfig.priority.includes(ticket.priority_level));
+    }
+
+    // Apply date range filter
+    if (filterConfig.dateRange.from || filterConfig.dateRange.to) {
+      filtered = filtered.filter(ticket => {
+        const ticketDate = new Date(ticket.created_at);
+        const isAfterFrom = !filterConfig.dateRange.from || ticketDate >= filterConfig.dateRange.from;
+        const isBeforeTo = !filterConfig.dateRange.to || ticketDate <= filterConfig.dateRange.to;
+        return isAfterFrom && isBeforeTo;
+      });
+    }
+
+    // Apply assignment filter
+    if (filterConfig.assignedToFilter !== "all") {
+      filtered = filtered.filter(ticket => 
+        filterConfig.assignedToFilter === "assigned" ? ticket.assigned_to : !ticket.assigned_to
+      );
+    }
+
+    // Apply customer filter
+    if (filterConfig.customerFilter && filterConfig.customerFilter !== "all") {
+      const customerEmail = customers.find(c => c.id === filterConfig.customerFilter)?.email?.toLowerCase();
+      filtered = filtered.filter(ticket => 
+        customers.find(c => c.id === ticket.customer_id)?.email?.toLowerCase().includes(customerEmail || "")
+      );
+    }
+
+    // Apply sorting if a column is selected
+    if (sortConfig.column !== "") {
+      filtered.sort((a, b) => {
+        let aValue = a[sortConfig.column as keyof Ticket] ?? "";
+        let bValue = b[sortConfig.column as keyof Ticket] ?? "";
+        
+        // Special handling for customer_id (sort by email)
+        if (sortConfig.column === "customer_id") {
+          const aEmail = customers.find(c => c.id === aValue)?.email?.toLowerCase() ?? "";
+          const bEmail = customers.find(c => c.id === bValue)?.email?.toLowerCase() ?? "";
+          return aEmail.localeCompare(bEmail) * sortConfig.direction;
+        }
+
+        // Special handling for priority_level
+        if (sortConfig.column === "priority_level") {
+          return (PRIORITY_ORDER[aValue as keyof typeof PRIORITY_ORDER] - 
+                 PRIORITY_ORDER[bValue as keyof typeof PRIORITY_ORDER]) * sortConfig.direction;
+        }
+
+        // Special handling for status
+        if (sortConfig.column === "status") {
+          return (STATUS_ORDER[aValue as keyof typeof STATUS_ORDER] - 
+                 STATUS_ORDER[bValue as keyof typeof STATUS_ORDER]) * sortConfig.direction;
+        }
+
+        // Default string comparison
+        return String(aValue).localeCompare(String(bValue)) * sortConfig.direction;
+      });
+    }
+
+    return filtered;
+  }, [tickets, filterConfig, sortConfig, customers]);
+
+  // Toggle sort for a column
+  const toggleSort = (column: keyof Ticket) => {
+    setSortConfig(current => ({
+      column,
+      direction: current.column === column && current.direction === 1 ? -1 : 1
+    }));
+  };
+
+  // Reset filters
+  const resetFilters = () => {
+    setFilterConfig({
+      status: [],
+      priority: [],
+      dateRange: {
+        from: undefined,
+        to: undefined,
+      },
+      assignedToFilter: "all",
+      customerFilter: "all"
+    });
+  };
 
   // Create ticket
   const createTicket = async (formData: FormData) => {
@@ -324,27 +469,306 @@ export function AdminTicketManagement() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Ticket Management</h2>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Create Ticket
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setIsFilterDialogOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Filter className="w-4 h-4" />
+            Filters
+            {(filterConfig.status.length > 0 || 
+              filterConfig.priority.length > 0 || 
+              filterConfig.dateRange.from || 
+              filterConfig.dateRange.to ||
+              filterConfig.assignedToFilter !== "all" ||
+              filterConfig.customerFilter) && (
+              <Badge variant="secondary" className="ml-2">
+                Active
+              </Badge>
+            )}
+          </Button>
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Create Ticket
+          </Button>
+        </div>
       </div>
+
+      {/* Filter Dialog */}
+      <Dialog open={isFilterDialogOpen} onOpenChange={setIsFilterDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Filter Tickets</DialogTitle>
+            <DialogDescription>
+              Set filters to narrow down the ticket list
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Status Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status</label>
+              <div className="flex flex-wrap gap-2">
+                {["open", "in_progress", "resolved", "closed"].map(status => (
+                  <Button
+                    key={status}
+                    variant={filterConfig.status.includes(status) ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFilterConfig(prev => ({
+                      ...prev,
+                      status: prev.status.includes(status)
+                        ? prev.status.filter(s => s !== status)
+                        : [...prev.status, status]
+                    }))}
+                  >
+                    {status.replace("_", " ")}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Priority Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Priority</label>
+              <div className="flex flex-wrap gap-2">
+                {["low", "medium", "high", "urgent"].map(priority => (
+                  <Button
+                    key={priority}
+                    variant={filterConfig.priority.includes(priority) ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFilterConfig(prev => ({
+                      ...prev,
+                      priority: prev.priority.includes(priority)
+                        ? prev.priority.filter(p => p !== priority)
+                        : [...prev.priority, priority]
+                    }))}
+                  >
+                    {priority}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Date Range Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Date Range</label>
+              <div className="flex gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "justify-start text-left font-normal",
+                        !filterConfig.dateRange.from && "text-muted-foreground"
+                      )}
+                    >
+                      {filterConfig.dateRange.from ? (
+                        format(filterConfig.dateRange.from, "PPP")
+                      ) : (
+                        "From date"
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={filterConfig.dateRange.from}
+                      onSelect={(date) =>
+                        setFilterConfig(prev => ({
+                          ...prev,
+                          dateRange: { ...prev.dateRange, from: date }
+                        }))
+                      }
+                    />
+                  </PopoverContent>
+                </Popover>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "justify-start text-left font-normal",
+                        !filterConfig.dateRange.to && "text-muted-foreground"
+                      )}
+                    >
+                      {filterConfig.dateRange.to ? (
+                        format(filterConfig.dateRange.to, "PPP")
+                      ) : (
+                        "To date"
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={filterConfig.dateRange.to}
+                      onSelect={(date) =>
+                        setFilterConfig(prev => ({
+                          ...prev,
+                          dateRange: { ...prev.dateRange, to: date }
+                        }))
+                      }
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            {/* Assignment Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Assignment Status</label>
+              <Select
+                value={filterConfig.assignedToFilter}
+                onValueChange={(value: "all" | "assigned" | "unassigned") =>
+                  setFilterConfig(prev => ({ ...prev, assignedToFilter: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by assignment" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All tickets</SelectItem>
+                  <SelectItem value="assigned">Assigned tickets</SelectItem>
+                  <SelectItem value="unassigned">Unassigned tickets</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Customer Filter */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Customer</label>
+              <Select
+                value={filterConfig.customerFilter}
+                onValueChange={(value) =>
+                  setFilterConfig(prev => ({ ...prev, customerFilter: value }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All customers</SelectItem>
+                  {customers.map(customer => (
+                    <SelectItem key={customer.id} value={customer.id}>
+                      {customer.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={resetFilters}>
+              Reset Filters
+            </Button>
+            <Button onClick={() => setIsFilterDialogOpen(false)}>
+              Apply Filters
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Tickets List */}
       <Card>
         {/* Table Headers */}
         <div className="px-6 py-3 border-b bg-muted/50">
           <div className="grid grid-cols-12 gap-4">
-            <div className="col-span-5 text-sm font-medium text-muted-foreground">Ticket Details</div>
-            <div className="col-span-2 text-sm font-medium text-muted-foreground">Status</div>
-            <div className="col-span-2 text-sm font-medium text-muted-foreground">Priority</div>
-            <div className="col-span-2 text-sm font-medium text-muted-foreground">Customer</div>
-            <div className="col-span-1 text-sm font-medium text-muted-foreground text-right">Actions</div>
+            <div className="col-span-5 text-sm font-medium text-muted-foreground">
+              <div className="flex items-center justify-between p-4 border-b">
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => toggleSort("title")}
+                    className="flex items-center gap-2 hover:text-foreground transition-colors"
+                  >
+                    Title
+                    {sortConfig.column === "title" ? (
+                      sortConfig.direction === 1 ? (
+                        <ArrowUp className="w-4 h-4" />
+                      ) : (
+                        <ArrowDown className="w-4 h-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="col-span-2 text-sm font-medium text-muted-foreground">
+              <div className="flex items-center justify-between p-4 border-b">
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => toggleSort("status")}
+                    className="flex items-center gap-2 hover:text-foreground transition-colors"
+                  >
+                    Status
+                    {sortConfig.column === "status" ? (
+                      sortConfig.direction === 1 ? (
+                        <ArrowUp className="w-4 h-4" />
+                      ) : (
+                        <ArrowDown className="w-4 h-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="col-span-2 text-sm font-medium text-muted-foreground">
+              <div className="flex items-center justify-between p-4 border-b">
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => toggleSort("priority_level")}
+                    className="flex items-center gap-2 hover:text-foreground transition-colors"
+                  >
+                    Priority
+                    {sortConfig.column === "priority_level" ? (
+                      sortConfig.direction === 1 ? (
+                        <ArrowUp className="w-4 h-4" />
+                      ) : (
+                        <ArrowDown className="w-4 h-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="col-span-2 text-sm font-medium text-muted-foreground">
+              <div className="flex items-center justify-between p-4 border-b">
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => toggleSort("customer_id")}
+                    className="flex items-center gap-2 hover:text-foreground transition-colors"
+                  >
+                    Customer
+                    {sortConfig.column === "customer_id" ? (
+                      sortConfig.direction === 1 ? (
+                        <ArrowUp className="w-4 h-4" />
+                      ) : (
+                        <ArrowDown className="w-4 h-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="col-span-1 text-sm font-medium text-muted-foreground">
+              <div className="flex items-center justify-end p-4 border-b">
+                Actions
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="divide-y">
-          {tickets.map((ticket) => (
+          {filteredAndSortedTickets().map((ticket) => (
             <div 
               key={ticket.id} 
               className="px-6 py-4 hover:bg-muted/50 transition-colors"
@@ -496,7 +920,7 @@ export function AdminTicketManagement() {
         </div>
 
         {/* Empty State */}
-        {tickets.length === 0 && (
+        {filteredAndSortedTickets().length === 0 && (
           <div className="p-6 text-center text-muted-foreground">
             No tickets found
           </div>

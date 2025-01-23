@@ -65,7 +65,8 @@ export async function updateSession(request: NextRequest) {
     }
   } else if (role === 'admin' || role === 'agent') {
     // If admin/agent tries to access customer routes, redirect to inbox
-    if (request.nextUrl.pathname.startsWith('/protected/customer')) {
+    if (request.nextUrl.pathname.startsWith('/protected/customer-portal') || 
+        request.nextUrl.pathname.startsWith('/protected/customer/')) {
       return NextResponse.redirect(new URL('/protected/inbox', request.url));
     }
   }
