@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
@@ -32,7 +31,6 @@ interface OrganizationDetailsProps {
 }
 
 export function OrganizationDetails({ organization, isAdmin }: OrganizationDetailsProps) {
-  const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(organization.name);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -74,7 +72,6 @@ export function OrganizationDetails({ organization, isAdmin }: OrganizationDetai
         title: "Organization updated",
         description: "Your organization details have been updated successfully.",
       });
-      setIsEditing(false);
       
       // Refresh the page data
       router.refresh();
