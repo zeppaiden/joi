@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Inbox, Users, BarChart2, Settings, HelpCircle, Building2, Ticket } from "lucide-react";
+import { Inbox, Users, BarChart2, Settings, Building2, Ticket } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
@@ -14,13 +14,11 @@ const adminAndAgentNavItems = [
   { href: "/protected/organization", icon: Building2, label: "Organization" },
   { href: "/protected/analytics", icon: BarChart2, label: "Analytics" },
   { href: "/protected/settings", icon: Settings, label: "Settings" },
-  { href: "/protected/help", icon: HelpCircle, label: "Help Center" },
 ] as const;
 
 const customerNavItems = [
   { href: "/protected/customer-portal", icon: Ticket, label: "Support Tickets" },
   { href: "/protected/settings", icon: Settings, label: "Settings" },
-  { href: "/protected/help", icon: HelpCircle, label: "Help Center" },
 ] as const;
 
 export function Navigation() {

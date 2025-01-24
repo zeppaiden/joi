@@ -13,7 +13,29 @@ export function Header() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
+  const [userRole, setUserRole] = useState<string | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    async function getUserRole() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        const { data } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        
+        if (data) {
+          setUserRole(data.role);
+        }
+      }
+    }
+
+    getUserRole();
+  }, []);
 
   // Update URL with debounced search query
   const debouncedUpdateUrl = useDebouncedCallback((value: string) => {
@@ -49,25 +71,31 @@ export function Header() {
     }
   };
 
+  const showSearch = userRole === 'admin' || userRole === 'agent';
+
   return (
     <header className="border-b">
       <div className="container mx-auto max-w-7xl px-4 py-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center flex-1 max-w-xl">
-            <div className="w-full relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  debouncedUpdateUrl(e.target.value);
-                }}
-                placeholder="Search tickets..."
-                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2"
-              />
+          {showSearch ? (
+            <div className="flex items-center flex-1 max-w-xl">
+              <div className="w-full relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    debouncedUpdateUrl(e.target.value);
+                  }}
+                  placeholder="Search tickets..."
+                  className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2"
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex-1" />
+          )}
           <div className="flex items-center space-x-4">
             <Button 
               variant="ghost" 

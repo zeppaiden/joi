@@ -7,49 +7,33 @@ export type Json =
   | Json[]
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          operationName?: string
+          query?: string
+          variables?: Json
+          extensions?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
-      attachments: {
-        Row: {
-          content_type: string
-          created_at: string
-          filename: string
-          id: string
-          message_id: string
-          size: number
-          storage_path: string
-          updated_at: string
-        }
-        Insert: {
-          content_type: string
-          created_at?: string
-          filename: string
-          id?: string
-          message_id: string
-          size: number
-          storage_path: string
-          updated_at?: string
-        }
-        Update: {
-          content_type?: string
-          created_at?: string
-          filename?: string
-          id?: string
-          message_id?: string
-          size?: number
-          storage_path?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "attachments_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       emails: {
         Row: {
           bcc: string | null
@@ -461,42 +445,27 @@ export type Database = {
       }
       users: {
         Row: {
-          avatar_url: string | null
           created_at: string
           deleted_at: string | null
           email: string
-          first_name: string | null
           id: string
-          last_name: string | null
-          phone_number: string | null
           role: string
-          timezone: string | null
           updated_at: string
         }
         Insert: {
-          avatar_url?: string | null
           created_at?: string
           deleted_at?: string | null
           email: string
-          first_name?: string | null
           id?: string
-          last_name?: string | null
-          phone_number?: string | null
           role: string
-          timezone?: string | null
           updated_at?: string
         }
         Update: {
-          avatar_url?: string | null
           created_at?: string
           deleted_at?: string | null
           email?: string
-          first_name?: string | null
           id?: string
-          last_name?: string | null
-          phone_number?: string | null
           role?: string
-          timezone?: string | null
           updated_at?: string
         }
         Relationships: []

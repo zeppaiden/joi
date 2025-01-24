@@ -91,10 +91,6 @@ export default async function OrganizationPage() {
     }
   }
 
-  // Add console logs for debugging
-  console.log('User:', user);
-  console.log('Organization:', adminOrg);
-
   async function joinOrganization(formData: FormData) {
     'use server';
     

@@ -42,7 +42,7 @@ export async function updateSession(request: NextRequest) {
   if (!user) {
     // If no session and trying to access protected routes, redirect to login
     if (request.nextUrl.pathname.startsWith("/protected")) {
-      return NextResponse.redirect(new URL("/login", request.url));
+      return NextResponse.redirect(new URL("/sign-in", request.url));
     }
     return response;
   }

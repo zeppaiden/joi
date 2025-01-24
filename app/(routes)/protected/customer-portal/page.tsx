@@ -1,9 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import Link from "next/link";
 import { CustomerCreateTicket } from "@/components/customer/customer-create-ticket";
+import { CustomerTicketList } from "@/components/customer/customer-ticket-list";
 
 export default async function CustomerPortalPage() {
   const supabase = await createClient();
@@ -55,60 +53,7 @@ export default async function CustomerPortalPage() {
         <CustomerCreateTicket userId={user.id} organizations={organizations || []} />
       </div>
       
-      <div className="space-y-4">
-        {tickets?.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              No tickets found. Create a new ticket to get help.
-            </CardContent>
-          </Card>
-        ) : (
-          tickets?.map((ticket) => (
-            <Link 
-              key={ticket.id} 
-              href={`/protected/customer/tickets/${ticket.id}`}
-              className="block"
-            >
-              <Card className="transition-colors hover:bg-muted/50">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle>{ticket.title}</CardTitle>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {ticket.organizations?.name}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Badge variant={
-                        !ticket.status ? "default" :
-                        ticket.status === "open" ? "default" :
-                        ticket.status === "in_progress" ? "secondary" :
-                        ticket.status === "resolved" ? "secondary" :
-                        "outline"
-                      }>
-                        {(ticket.status || 'open').replace('_', ' ')}
-                      </Badge>
-                      {ticket.assigned_to && (
-                        <p className="text-sm text-muted-foreground">
-                          Agent: {ticket.assigned_to.email}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground line-clamp-2">
-                    {ticket.description}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Created: {new Date(ticket.created_at).toLocaleString()}
-                  </p>
-                </CardContent>
-              </Card>
-            </Link>
-          ))
-        )}
-      </div>
+      <CustomerTicketList initialTickets={tickets || []} />
     </div>
   );
 } 
