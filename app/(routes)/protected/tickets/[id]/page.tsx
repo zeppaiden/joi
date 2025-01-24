@@ -874,7 +874,7 @@ export default function TicketDetailsPage() {
           >
             {ticket?.priority_level === 'urgent' ? 'De-escalate Ticket' : 'Escalate Ticket'}
           </Button>
-          <RoleGate allowedRole="admin">
+          <RoleGate allowedRoles={['admin']}>
             <Button 
               variant="default"
               onClick={resolveTicket}

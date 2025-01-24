@@ -3,12 +3,14 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 
+type Role = 'admin' | 'agent' | 'customer';
+
 interface RoleGateProps {
   children: React.ReactNode;
-  allowedRole: 'admin' | 'agent' | 'customer';
+  allowedRoles: Role[];
 }
 
-export function RoleGate({ children, allowedRole }: RoleGateProps) {
+export function RoleGate({ children, allowedRoles }: RoleGateProps) {
   const [canAccess, setCanAccess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -36,7 +38,7 @@ export function RoleGate({ children, allowedRole }: RoleGateProps) {
           return;
         }
 
-        setCanAccess(userData.role === allowedRole);
+        setCanAccess(allowedRoles.includes(userData.role as Role));
       } catch (error) {
         setCanAccess(false);
       } finally {
@@ -45,7 +47,7 @@ export function RoleGate({ children, allowedRole }: RoleGateProps) {
     }
 
     checkRole();
-  }, [allowedRole]);
+  }, [allowedRoles]);
 
   if (isLoading) return null;
   if (!canAccess) return null;

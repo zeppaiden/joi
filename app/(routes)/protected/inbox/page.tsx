@@ -2,17 +2,17 @@
 
 import { Suspense } from "react";
 import { ErrorBoundary } from "react-error-boundary";
-import { AdminTicketManagement } from "@/components/tickets/admin-ticket-management";
 import { RoleGate } from "@/components/auth/role-gate";
 import { LoadingState } from "@/components/ui/loading-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AdminTicketManagement } from "@/components/tickets/admin-ticket-management";
 import { AgentTicketManagement } from "@/components/tickets/agent-ticket-management";
 
 function ErrorFallback({ error }: { error: Error }) {
   return (
-    <Alert variant="destructive" className="mb-6">
+    <Alert variant="destructive">
       <AlertDescription>
-        Something went wrong: {error.message}
+        Error: {error.message}
       </AlertDescription>
     </Alert>
   );
@@ -20,24 +20,28 @@ function ErrorFallback({ error }: { error: Error }) {
 
 export default function InboxPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Admin View */}
-      <ErrorBoundary FallbackComponent={ErrorFallback}>
-        <Suspense fallback={<LoadingState message="Loading interface..." />}>
-          <RoleGate allowedRole="admin">
-            <AdminTicketManagement />
-          </RoleGate>
-        </Suspense>
-      </ErrorBoundary>
+      <div>
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <Suspense fallback={<LoadingState message="Loading interface..." />}>
+            <RoleGate allowedRoles={['admin']}>
+              <AdminTicketManagement />
+            </RoleGate>
+          </Suspense>
+        </ErrorBoundary>
+      </div>
 
       {/* Agent View */}
-      <ErrorBoundary FallbackComponent={ErrorFallback}>
-        <Suspense fallback={<LoadingState message="Loading tickets..." />}>
-          <RoleGate allowedRole="agent">
-            <AgentTicketManagement />
-          </RoleGate>
-        </Suspense>
-      </ErrorBoundary>
+      <div>
+        <ErrorBoundary FallbackComponent={ErrorFallback}>
+          <Suspense fallback={<LoadingState message="Loading tickets..." />}>
+            <RoleGate allowedRoles={['agent']}>
+              <AgentTicketManagement />
+            </RoleGate>
+          </Suspense>
+        </ErrorBoundary>
+      </div>
     </div>
   );
 }
