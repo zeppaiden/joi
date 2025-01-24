@@ -4,13 +4,13 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CustomerTicketChat } from "@/components/customer/customer-ticket-chat";
 
-export default async function CustomerTicketPage({
-  params,
-}: {
-  params: { id: string }
-}) {
-  // Properly await params before accessing properties
-  const { id } = await params;
+interface PageProps {
+  params: { id: string };
+  searchParams: { [key: string]: string | string[] | undefined };
+}
+
+export default async function CustomerTicketPage(props: PageProps) {
+  const { id } = props.params;
   const supabase = await createClient();
 
   // Get current user using the secure method
@@ -93,8 +93,8 @@ export default async function CustomerTicketPage({
           </div>
           
           <CustomerTicketChat 
-            ticket={ticket} 
-            initialMessages={messages || []} 
+            ticket={ticket as any} 
+            initialMessages={messages as any} 
           />
         </CardContent>
       </Card>

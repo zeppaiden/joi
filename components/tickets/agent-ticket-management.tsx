@@ -1,10 +1,14 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Plus, Filter, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/utils/supabase/client";
+import { Filter, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
+import { createClient } from "@/utils/supabase/client";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -22,37 +26,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Database } from "@/types/supabase";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
-type OrganizationMember = Database["public"]["Tables"]["organization_members"]["Row"];
-type Organization = Database["public"]["Tables"]["organizations"]["Row"];
-
-type User = Database["public"]["Tables"]["users"]["Row"] & {
-  role: 'admin' | 'agent' | 'customer';
-  organization_members?: OrganizationMember[];
-};
-
+type User = Database["public"]["Tables"]["users"]["Row"];
 type Ticket = Database["public"]["Tables"]["tickets"]["Row"] & {
-  status: 'open' | 'in_progress' | 'resolved' | 'closed';
-  priority_level: 'low' | 'medium' | 'high' | 'urgent';
-  organizations?: Organization;
+  customer: User;
+  agent: User | null;
+  organization: {
+    id: string;
+    name: string;
+  } | null;
 };
 
 type SortConfig = {
-  column: keyof Ticket | "";
-  direction: number;  // 1 for ascending, -1 for descending
+  key: keyof Ticket;
+  direction: "asc" | "desc";
 };
 
 type FilterConfig = {
-  status: string[];
-  priority: string[];
+  status: string | null;
+  priority: string | null;
   dateRange: {
     from: Date | undefined;
     to: Date | undefined;
@@ -87,13 +85,10 @@ export function AgentTicketManagement() {
   const [customers, setCustomers] = useState<User[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [sortConfig, setSortConfig] = useState<SortConfig>({
-    column: "",
-    direction: 1
-  });
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "created_at", direction: "desc" });
   const [filterConfig, setFilterConfig] = useState<FilterConfig>({
-    status: [],
-    priority: [],
+    status: null,
+    priority: null,
     dateRange: {
       from: undefined,
       to: undefined,
@@ -101,59 +96,46 @@ export function AgentTicketManagement() {
     assignedToFilter: "all",
     customerFilter: "all"
   });
+  const supabase = createClient();
 
   // Load users and tickets
   const loadData = useCallback(async () => {
-    const supabase = createClient();
-    const searchQuery = searchParams.get("q")?.toLowerCase() || "";
+    setIsLoading(true);
+    try {
+      const { data: ticketsData, error: ticketsError } = await supabase
+        .from('tickets')
+        .select(`
+          *,
+          customer:users!tickets_customer_id_fkey (
+            id,
+            email,
+            role
+          ),
+          agent:users!tickets_assigned_to_fkey (
+            id,
+            email,
+            role
+          ),
+          organization:organizations (
+            id,
+            name
+          )
+        `)
+        .is('deleted_at', null);
 
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    // Get agents and admins with their organization memberships
-    const { data: agentsData } = await supabase
-      .from('users')
-      .select(`
-        *,
-        organization_members!inner(
-          organization_id
-        )
-      `)
-      .in('role', ['agent', 'admin'])
-      .is('deleted_at', null);
-    
-    // Get active customers
-    const { data: customersData } = await supabase
-      .from('users')
-      .select('*')
-      .eq('role', 'customer')
-      .is('deleted_at', null);
-
-    // Get tickets assigned to the current agent
-    let ticketsQuery = supabase
-      .from('tickets')
-      .select(`
-        *,
-        organizations (
-          id,
-          name
-        )
-      `)
-      .eq('assigned_to', user.id)
-      .is('deleted_at', null);
-    
-    // Apply search filter if query exists
-    if (searchQuery) {
-      ticketsQuery = ticketsQuery.ilike('title', `%${searchQuery}%`);
+      if (ticketsError) throw ticketsError;
+      setTickets(ticketsData as any);
+    } catch (error) {
+      console.error('Error loading tickets:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load tickets",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
-
-    const { data: ticketsData } = await ticketsQuery.order('created_at', { ascending: false });
-
-    if (agentsData) setAgents(agentsData as User[]);
-    if (customersData) setCustomers(customersData as User[]);
-    if (ticketsData) setTickets(ticketsData as Ticket[]);
-  }, [searchParams]);
+  }, [supabase, toast]);
 
   // Initial load
   useEffect(() => {
@@ -165,13 +147,13 @@ export function AgentTicketManagement() {
     let filtered = [...tickets];
 
     // Apply status filter
-    if (filterConfig.status.length > 0) {
-      filtered = filtered.filter(ticket => filterConfig.status.includes(ticket.status));
+    if (filterConfig.status) {
+      filtered = filtered.filter(ticket => ticket.status === filterConfig.status);
     }
 
     // Apply priority filter
-    if (filterConfig.priority.length > 0) {
-      filtered = filtered.filter(ticket => filterConfig.priority.includes(ticket.priority_level));
+    if (filterConfig.priority) {
+      filtered = filtered.filter(ticket => ticket.priority_level === filterConfig.priority);
     }
 
     // Apply date range filter
@@ -193,32 +175,32 @@ export function AgentTicketManagement() {
     }
 
     // Apply sorting if a column is selected
-    if (sortConfig.column !== "") {
+    if (sortConfig.key !== "created_at") {
       filtered.sort((a, b) => {
-        let aValue = a[sortConfig.column as keyof Ticket] ?? "";
-        let bValue = b[sortConfig.column as keyof Ticket] ?? "";
+        let aValue = a[sortConfig.key as keyof Ticket] ?? "";
+        let bValue = b[sortConfig.key as keyof Ticket] ?? "";
         
         // Special handling for customer_id (sort by email)
-        if (sortConfig.column === "customer_id") {
+        if (sortConfig.key === "customer_id") {
           const aEmail = customers.find(c => c.id === aValue)?.email?.toLowerCase() ?? "";
           const bEmail = customers.find(c => c.id === bValue)?.email?.toLowerCase() ?? "";
-          return aEmail.localeCompare(bEmail) * sortConfig.direction;
+          return aEmail.localeCompare(bEmail) * (sortConfig.direction === "asc" ? 1 : -1);
         }
 
         // Special handling for priority_level
-        if (sortConfig.column === "priority_level") {
+        if (sortConfig.key === "priority_level") {
           return (PRIORITY_ORDER[aValue as keyof typeof PRIORITY_ORDER] - 
-                 PRIORITY_ORDER[bValue as keyof typeof PRIORITY_ORDER]) * sortConfig.direction;
+                 PRIORITY_ORDER[bValue as keyof typeof PRIORITY_ORDER]) * (sortConfig.direction === "asc" ? 1 : -1);
         }
 
         // Special handling for status
-        if (sortConfig.column === "status") {
+        if (sortConfig.key === "status") {
           return (STATUS_ORDER[aValue as keyof typeof STATUS_ORDER] - 
-                 STATUS_ORDER[bValue as keyof typeof STATUS_ORDER]) * sortConfig.direction;
+                 STATUS_ORDER[bValue as keyof typeof STATUS_ORDER]) * (sortConfig.direction === "asc" ? 1 : -1);
         }
 
         // Default string comparison
-        return String(aValue).localeCompare(String(bValue)) * sortConfig.direction;
+        return String(aValue).localeCompare(String(bValue)) * (sortConfig.direction === "asc" ? 1 : -1);
       });
     }
 
@@ -226,18 +208,18 @@ export function AgentTicketManagement() {
   }, [tickets, filterConfig, sortConfig, customers]);
 
   // Toggle sort for a column
-  const toggleSort = (column: keyof Ticket) => {
+  const toggleSort = (key: keyof Ticket) => {
     setSortConfig(current => ({
-      column,
-      direction: current.column === column && current.direction === 1 ? -1 : 1
+      key,
+      direction: current.key === key && current.direction === "asc" ? "desc" : "asc"
     }));
   };
 
   // Reset filters
   const resetFilters = () => {
     setFilterConfig({
-      status: [],
-      priority: [],
+      status: null,
+      priority: null,
       dateRange: {
         from: undefined,
         to: undefined,
@@ -251,8 +233,6 @@ export function AgentTicketManagement() {
   const updateTicket = async (ticketId: string, updates: Partial<Ticket>) => {
     setIsLoading(true);
     try {
-      const supabase = createClient();
-      
       const { data, error } = await supabase
         .from('tickets')
         .update(updates)
@@ -293,8 +273,8 @@ export function AgentTicketManagement() {
           >
             <Filter className="w-4 h-4" />
             Filters
-            {(filterConfig.status.length > 0 || 
-              filterConfig.priority.length > 0 || 
+            {(filterConfig.status || 
+              filterConfig.priority || 
               filterConfig.dateRange.from || 
               filterConfig.dateRange.to ||
               filterConfig.customerFilter) && (
@@ -324,13 +304,11 @@ export function AgentTicketManagement() {
                 {["open", "in_progress", "resolved", "closed"].map(status => (
                   <Button
                     key={status}
-                    variant={filterConfig.status.includes(status) ? "default" : "outline"}
+                    variant={filterConfig.status === status ? "default" : "outline"}
                     size="sm"
                     onClick={() => setFilterConfig(prev => ({
                       ...prev,
-                      status: prev.status.includes(status)
-                        ? prev.status.filter(s => s !== status)
-                        : [...prev.status, status]
+                      status: prev.status === status ? null : status
                     }))}
                   >
                     {status.replace("_", " ")}
@@ -346,13 +324,11 @@ export function AgentTicketManagement() {
                 {["low", "medium", "high", "urgent"].map(priority => (
                   <Button
                     key={priority}
-                    variant={filterConfig.priority.includes(priority) ? "default" : "outline"}
+                    variant={filterConfig.priority === priority ? "default" : "outline"}
                     size="sm"
                     onClick={() => setFilterConfig(prev => ({
                       ...prev,
-                      priority: prev.priority.includes(priority)
-                        ? prev.priority.filter(p => p !== priority)
-                        : [...prev.priority, priority]
+                      priority: prev.priority === priority ? null : priority
                     }))}
                   >
                     {priority}
@@ -474,8 +450,8 @@ export function AgentTicketManagement() {
                     className="flex items-center gap-2 hover:text-foreground transition-colors"
                   >
                     Title
-                    {sortConfig.column === "title" ? (
-                      sortConfig.direction === 1 ? (
+                    {sortConfig.key === "title" ? (
+                      sortConfig.direction === "asc" ? (
                         <ArrowUp className="w-4 h-4" />
                       ) : (
                         <ArrowDown className="w-4 h-4" />
@@ -495,8 +471,8 @@ export function AgentTicketManagement() {
                     className="flex items-center gap-2 hover:text-foreground transition-colors"
                   >
                     Status
-                    {sortConfig.column === "status" ? (
-                      sortConfig.direction === 1 ? (
+                    {sortConfig.key === "status" ? (
+                      sortConfig.direction === "asc" ? (
                         <ArrowUp className="w-4 h-4" />
                       ) : (
                         <ArrowDown className="w-4 h-4" />
@@ -516,8 +492,8 @@ export function AgentTicketManagement() {
                     className="flex items-center gap-2 hover:text-foreground transition-colors"
                   >
                     Priority
-                    {sortConfig.column === "priority_level" ? (
-                      sortConfig.direction === 1 ? (
+                    {sortConfig.key === "priority_level" ? (
+                      sortConfig.direction === "asc" ? (
                         <ArrowUp className="w-4 h-4" />
                       ) : (
                         <ArrowDown className="w-4 h-4" />
@@ -537,8 +513,8 @@ export function AgentTicketManagement() {
                     className="flex items-center gap-2 hover:text-foreground transition-colors"
                   >
                     Customer
-                    {sortConfig.column === "customer_id" ? (
-                      sortConfig.direction === 1 ? (
+                    {sortConfig.key === "customer_id" ? (
+                      sortConfig.direction === "asc" ? (
                         <ArrowUp className="w-4 h-4" />
                       ) : (
                         <ArrowDown className="w-4 h-4" />
@@ -579,7 +555,7 @@ export function AgentTicketManagement() {
                     ticket.status === "resolved" ? "secondary" :
                     "outline"
                   }>
-                    {ticket.status.replace("_", " ")}
+                    {ticket.status?.replace('_', ' ') || 'unknown'}
                   </Badge>
                 </div>
 

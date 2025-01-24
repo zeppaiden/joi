@@ -119,7 +119,6 @@ export default function TicketDetailsPage() {
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
-  const [tags, setTags] = useState<Tag[]>([]);
   const [ticketTags, setTicketTags] = useState<Tag[]>([]);
   const [isTagDialogOpen, setIsTagDialogOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
@@ -154,7 +153,7 @@ export default function TicketDetailsPage() {
             customer:users!tickets_customer_id_fkey(id, email, role),
             agent:users!tickets_assigned_to_fkey(id, email, role)
           `)
-          .eq('id', id)
+          .eq('id', id || '')
           .single();
 
         if (ticketError) throw ticketError;
@@ -166,7 +165,7 @@ export default function TicketDetailsPage() {
             *,
             user:users!messages_user_id_fkey(id, email, role)
           `)
-          .eq('ticket_id', id)
+          .eq('ticket_id', id || '')
           .is('deleted_at', null)
           .order('created_at', { ascending: true });
 
@@ -190,7 +189,7 @@ export default function TicketDetailsPage() {
               created_by
             )
           `)
-          .eq('ticket_id', id);
+          .eq('ticket_id', id || '');
 
         if (ticketTagsError) throw ticketTagsError;
 
@@ -206,7 +205,7 @@ export default function TicketDetailsPage() {
             *,
             user:users!internal_notes_created_by_fkey(id, email, role)
           `)
-          .eq('ticket_id', id)
+          .eq('ticket_id', id || '')
           .is('deleted_at', null)
           .order('created_at', { ascending: false });
 
@@ -219,14 +218,13 @@ export default function TicketDetailsPage() {
             *,
             user:users!emails_sent_by_fkey(id, email, role)
           `)
-          .eq('ticket_id', id)
+          .eq('ticket_id', id || '')
           .order('created_at', { ascending: false });
 
         if (emailsError) throw emailsError;
 
         setTicket(ticketData as unknown as Ticket);
         setMessages(messagesData as unknown as Message[]);
-        setTags(tagsData || []);
         setTicketTags(ticketTags);
         setInternalNotes(notesData as unknown as InternalNote[] || []);
         setEmails(emailsData as unknown as Email[]);
@@ -409,7 +407,7 @@ export default function TicketDetailsPage() {
       if (error) throw error;
 
       // Update local state
-      setTags(prev => [...prev, tag]);
+      setTicketTags(prev => [...prev, tag]);
       setNewTagName("");
       
       // Add new tag to ticket
@@ -440,7 +438,6 @@ export default function TicketDetailsPage() {
       if (error) throw error;
 
       // Remove from local state
-      setTags(prev => prev.filter(t => t.id !== tagId));
       setTicketTags(prev => prev.filter(t => t.id !== tagId));
 
       toast({
@@ -467,7 +464,7 @@ export default function TicketDetailsPage() {
       const { error } = await supabase
         .from('ticket_tags')
         .insert({
-          ticket_id: id,
+          ticket_id: id || '',
           tag_id: tagId,
           created_by: user.id,
         });
@@ -505,7 +502,7 @@ export default function TicketDetailsPage() {
       const { error } = await supabase
         .from('ticket_tags')
         .delete()
-        .eq('ticket_id', id)
+        .eq('ticket_id', id || '')
         .eq('tag_id', tagId);
 
       if (error) throw error;
@@ -533,7 +530,7 @@ export default function TicketDetailsPage() {
       const { error } = await supabase
         .from('internal_notes')
         .insert({
-          ticket_id: id,
+          ticket_id: id || '',
           content: newNote.trim(),
           created_by: user.id,
         });
@@ -565,7 +562,7 @@ export default function TicketDetailsPage() {
       if (!user) throw new Error("Not authenticated");
 
       const { error } = await supabase.from('emails').insert({
-        ticket_id: id,
+        ticket_id: id || '',
         sent_by: user.id,
         to_email: emailForm.to,
         cc: emailForm.cc || null,
@@ -613,7 +610,7 @@ export default function TicketDetailsPage() {
           priority_level: 'urgent',
           updated_at: new Date().toISOString()
         })
-        .eq('id', ticket?.id);
+        .eq('id', ticket?.id || '');
 
       if (ticketError) throw ticketError;
 
@@ -621,7 +618,7 @@ export default function TicketDetailsPage() {
       const { error: noteError } = await supabase
         .from('internal_notes')
         .insert({
-          ticket_id: id,
+          ticket_id: id || '',
           content: `Ticket escalated to urgent priority by ${user.email}`,
           created_by: user.id
         });
@@ -658,7 +655,7 @@ export default function TicketDetailsPage() {
           priority_level: 'high',
           updated_at: new Date().toISOString()
         })
-        .eq('id', ticket?.id);
+        .eq('id', ticket?.id || '');
 
       if (ticketError) throw ticketError;
 
@@ -666,7 +663,7 @@ export default function TicketDetailsPage() {
       const { error: noteError } = await supabase
         .from('internal_notes')
         .insert({
-          ticket_id: id,
+          ticket_id: id || '',
           content: `Ticket de-escalated to high priority by ${user.email}`,
           created_by: user.id
         });
@@ -704,7 +701,7 @@ export default function TicketDetailsPage() {
           status: 'resolved',
           updated_at: new Date().toISOString()
         })
-        .eq('id', ticket.id);
+        .eq('id', ticket?.id || '');
 
       if (ticketError) throw ticketError;
 
@@ -712,7 +709,7 @@ export default function TicketDetailsPage() {
       const { error: noteError } = await supabase
         .from('internal_notes')
         .insert({
-          ticket_id: id,
+          ticket_id: id || '',
           content: `Ticket resolved by ${user.email}`,
           created_by: user.id
         });
