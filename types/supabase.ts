@@ -50,6 +50,69 @@ export type Database = {
           },
         ]
       }
+      documents: {
+        Row: {
+          category: Database["public"]["Enums"]["document_category"]
+          created_at: string | null
+          deleted_at: string | null
+          description: string
+          file_name: string
+          file_path: string
+          file_size: number
+          file_type: string
+          id: string
+          organization_id: string
+          title: string
+          updated_at: string | null
+          uploaded_by: string
+        }
+        Insert: {
+          category: Database["public"]["Enums"]["document_category"]
+          created_at?: string | null
+          deleted_at?: string | null
+          description: string
+          file_name: string
+          file_path: string
+          file_size: number
+          file_type: string
+          id?: string
+          organization_id: string
+          title: string
+          updated_at?: string | null
+          uploaded_by: string
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["document_category"]
+          created_at?: string | null
+          deleted_at?: string | null
+          description?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          file_type?: string
+          id?: string
+          organization_id?: string
+          title?: string
+          updated_at?: string | null
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       emails: {
         Row: {
           bcc: string | null
@@ -518,7 +581,7 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      document_category: "manuals" | "how-to" | "faqs" | "other"
     }
     CompositeTypes: {
       [_ in never]: never

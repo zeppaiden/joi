@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Inbox, Users, BarChart2, Settings, Building2, Ticket } from "lucide-react";
+import { Inbox, Users, BarChart2, Settings, Building2, Ticket, Book } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
@@ -13,6 +13,7 @@ const adminAndAgentNavItems = [
   { href: "/protected/customers", icon: Users, label: "Customers" },
   { href: "/protected/organization", icon: Building2, label: "Organization" },
   { href: "/protected/analytics", icon: BarChart2, label: "Analytics" },
+  { href: "/protected/knowledge-base", icon: Book, label: "Knowledge Base" },
   { href: "/protected/settings", icon: Settings, label: "Settings" },
 ] as const;
 
