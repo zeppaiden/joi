@@ -2,12 +2,11 @@
 
 import { Suspense } from "react";
 import { ErrorBoundary } from "react-error-boundary";
-import { TicketStats } from "@/components/tickets/ticket-stats";
-import { TicketDashboard } from "@/components/tickets/ticket-dashboard";
 import { AdminTicketManagement } from "@/components/tickets/admin-ticket-management";
 import { RoleGate } from "@/components/auth/role-gate";
 import { LoadingState } from "@/components/ui/loading-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AgentTicketManagement } from "@/components/tickets/agent-ticket-management";
 
 function ErrorFallback({ error }: { error: Error }) {
   return (
@@ -31,20 +30,14 @@ export default function InboxPage() {
         </Suspense>
       </ErrorBoundary>
 
-      {/* Agent/Customer View */}
-      <RoleGate allowedRole="agent">
-        <ErrorBoundary FallbackComponent={ErrorFallback}>
-          <Suspense fallback={<LoadingState message="Loading statistics..." />}>
-            <TicketStats />
-          </Suspense>
-        </ErrorBoundary>
-
-        <ErrorBoundary FallbackComponent={ErrorFallback}>
-          <Suspense fallback={<LoadingState message="Loading tickets..." />}>
-            <TicketDashboard />
-          </Suspense>
-        </ErrorBoundary>
-      </RoleGate>
+      {/* Agent View */}
+      <ErrorBoundary FallbackComponent={ErrorFallback}>
+        <Suspense fallback={<LoadingState message="Loading tickets..." />}>
+          <RoleGate allowedRole="agent">
+            <AgentTicketManagement />
+          </RoleGate>
+        </Suspense>
+      </ErrorBoundary>
     </div>
   );
 }

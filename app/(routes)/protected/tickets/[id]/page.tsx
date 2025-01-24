@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Send, Plus, X, Paperclip, ListChecks } from "lucide-react";
+import { ArrowLeft, Send, Plus, X, Paperclip, ListChecks, Loader2 } from "lucide-react";
 import { Database } from "@/types/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -613,7 +613,7 @@ export default function TicketDetailsPage() {
           priority_level: 'urgent',
           updated_at: new Date().toISOString()
         })
-        .eq('id', ticket.id);
+        .eq('id', ticket?.id);
 
       if (ticketError) throw ticketError;
 
@@ -628,19 +628,65 @@ export default function TicketDetailsPage() {
 
       if (noteError) throw noteError;
 
-      // Update local state
-      setTicket(prev => prev ? { ...prev, priority_level: 'urgent' } : null);
+      // Update local state immediately
+      setTicket(prev => prev ? { ...prev, priority_level: 'urgent', updated_at: new Date().toISOString() } : null);
 
+      router.refresh();
       toast({
         title: "Success",
-        description: "Ticket has been escalated",
+        description: "Ticket has been escalated"
       });
     } catch (error) {
       console.error('Error escalating ticket:', error);
       toast({
-        title: "Error",
-        description: "Failed to escalate ticket",
         variant: "destructive",
+        title: "Error",
+        description: "Failed to escalate ticket"
+      });
+    }
+  };
+
+  const deEscalateTicket = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // Update ticket priority
+      const { error: ticketError } = await supabase
+        .from('tickets')
+        .update({
+          priority_level: 'high',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', ticket?.id);
+
+      if (ticketError) throw ticketError;
+
+      // Add internal note about de-escalation
+      const { error: noteError } = await supabase
+        .from('internal_notes')
+        .insert({
+          ticket_id: id,
+          content: `Ticket de-escalated to high priority by ${user.email}`,
+          created_by: user.id
+        });
+
+      if (noteError) throw noteError;
+
+      // Update local state immediately
+      setTicket(prev => prev ? { ...prev, priority_level: 'high', updated_at: new Date().toISOString() } : null);
+
+      router.refresh();
+      toast({
+        title: "Success",
+        description: "Ticket has been de-escalated"
+      });
+    } catch (error) {
+      console.error('Error de-escalating ticket:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to de-escalate ticket"
       });
     }
   };
@@ -840,28 +886,28 @@ export default function TicketDetailsPage() {
   }
 
   return (
-    <RoleGate allowedRole="admin">
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={() => router.push('/protected/inbox')}
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <h1 className="text-2xl font-bold">Ticket {ticket.id}</h1>
-          </div>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline"
-              onClick={escalateTicket}
-              disabled={!ticket || ticket.priority_level === 'urgent'}
-            >
-              Escalate Ticket
-            </Button>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => router.push('/protected/inbox')}
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <h1 className="text-2xl font-bold">Ticket {ticket.id}</h1>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            onClick={ticket?.priority_level === 'urgent' ? deEscalateTicket : escalateTicket}
+            disabled={!ticket}
+          >
+            {ticket?.priority_level === 'urgent' ? 'De-escalate Ticket' : 'Escalate Ticket'}
+          </Button>
+          <RoleGate allowedRole="admin">
             <Button 
               variant="default"
               onClick={resolveTicket}
@@ -869,345 +915,337 @@ export default function TicketDetailsPage() {
             >
               Resolve Ticket
             </Button>
-          </div>
+          </RoleGate>
         </div>
+      </div>
 
-        {/* Top Section - Customer and Ticket Info */}
-        <div className="grid grid-cols-2 gap-6">
-          {/* Customer Information */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Customer Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="space-y-4">
-                <div>
-                  <dt className="text-sm font-medium text-muted-foreground">Name</dt>
-                  <dd>{ticket.customer?.email}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-muted-foreground">Email</dt>
-                  <dd>{ticket.customer?.email}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-muted-foreground">Company</dt>
-                  <dd>{ticket.organizations?.name}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-muted-foreground">Phone</dt>
-                  <dd>{ticket.phone || 'Not provided'}</dd>
-                </div>
-              </dl>
-            </CardContent>
-          </Card>
+      {/* Top Section - Customer and Ticket Info */}
+      <div className="grid grid-cols-2 gap-6">
+        {/* Customer Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Customer Information</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="space-y-4">
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Name</dt>
+                <dd>{ticket.customer?.email}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Email</dt>
+                <dd>{ticket.customer?.email}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Company</dt>
+                <dd>{ticket.organizations?.name}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Phone</dt>
+                <dd>{ticket.phone || 'Not provided'}</dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
 
-          {/* Ticket Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Ticket Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex gap-2">
-                  <Badge variant={
-                    ticket.status === "open" ? "default" :
-                    ticket.status === "in_progress" ? "secondary" :
-                    ticket.status === "resolved" ? "secondary" :
-                    "outline"
-                  }>
-                    {ticket.status?.replace('_', ' ')}
-                  </Badge>
-                  <Badge variant={
-                    ticket.priority_level === "urgent" ? "destructive" :
-                    ticket.priority_level === "high" ? "destructive" :
-                    ticket.priority_level === "medium" ? "secondary" :
-                    "default"
-                  }>
-                    {ticket.priority_level} priority
-                  </Badge>
+        {/* Ticket Details */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Ticket Details</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <Badge variant={
+                  ticket.status === "open" ? "default" :
+                  ticket.status === "in_progress" ? "secondary" :
+                  ticket.status === "resolved" ? "secondary" :
+                  "outline"
+                }>
+                  {ticket.status?.replace('_', ' ')}
+                </Badge>
+                <Badge variant={
+                  ticket.priority_level === "urgent" ? "destructive" :
+                  ticket.priority_level === "high" ? "destructive" :
+                  ticket.priority_level === "medium" ? "secondary" :
+                  "default"
+                }>
+                  {ticket.priority_level} priority
+                </Badge>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">Subject</h3>
+                <p>{ticket.title}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-muted-foreground">Description</h3>
+                <p className="whitespace-pre-wrap">{ticket.description}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Created</h3>
+                  <p>{new Date(ticket.created_at).toLocaleString()}</p>
                 </div>
                 <div>
-                  <h3 className="text-sm font-medium text-muted-foreground">Subject</h3>
-                  <p>{ticket.title}</p>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-muted-foreground">Description</h3>
-                  <p className="whitespace-pre-wrap">{ticket.description}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground">Created</h3>
-                    <p>{new Date(ticket.created_at).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground">Last Updated</h3>
-                    <p>{new Date(ticket.updated_at).toLocaleString()}</p>
-                  </div>
+                  <h3 className="text-sm font-medium text-muted-foreground">Last Updated</h3>
+                  <p>{new Date(ticket.updated_at).toLocaleString()}</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* Message History */}
-        <Card>
-          <CardHeader className="pb-3">
-            <Tabs defaultValue="messages">
-              <TabsList>
-                <TabsTrigger value="messages">Message History</TabsTrigger>
-                <TabsTrigger value="email">Email History</TabsTrigger>
-              </TabsList>
-              
-              {/* Messages Tab Content */}
-              <TabsContent value="messages">
-                {!ticket.assigned_to && (
-                  <div className="bg-destructive/10 text-destructive rounded-lg p-4 mb-4 text-sm">
-                    Please assign an agent to this ticket before sending messages.
-                    This ensures proper ticket handling and customer support.
-                  </div>
-                )}
-                <ScrollArea className="h-[400px] border rounded-lg mb-4 p-4">
-                  <div className="flex flex-col space-y-4">
-                    {messages?.map((msg) => (
+      {/* Message History */}
+      <Card>
+        <CardHeader className="pb-3">
+          <Tabs defaultValue="messages">
+            <TabsList>
+              <TabsTrigger value="messages">Message History</TabsTrigger>
+              <TabsTrigger value="email">Email History</TabsTrigger>
+            </TabsList>
+            
+            {/* Messages Tab Content */}
+            <TabsContent value="messages">
+              {!ticket.assigned_to && (
+                <div className="bg-destructive/10 text-destructive rounded-lg p-4 mb-4 text-sm">
+                  Please assign an agent to this ticket before sending messages.
+                  This ensures proper ticket handling and customer support.
+                </div>
+              )}
+              <ScrollArea className="h-[400px] border rounded-lg mb-4 p-4">
+                <div className="flex flex-col space-y-4">
+                  {messages?.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={cn(
+                        "flex w-full",
+                        msg.user.role === "customer" ? "justify-start" : "justify-end"
+                      )}
+                    >
                       <div
-                        key={msg.id}
                         className={cn(
-                          "flex w-full",
-                          msg.user.role === "customer" ? "justify-start" : "justify-end"
+                          "max-w-[80%] rounded-lg p-3 overflow-hidden",
+                          msg.user.role === "customer"
+                            ? "bg-muted"
+                            : "bg-primary text-primary-foreground"
                         )}
                       >
-                        <div
-                          className={cn(
-                            "max-w-[80%] rounded-lg p-3 overflow-hidden",
-                            msg.user.role === "customer"
-                              ? "bg-muted"
-                              : "bg-primary text-primary-foreground"
-                          )}
-                        >
-                          <div className="text-xs opacity-70 mb-1">
-                            {msg.user.email} • {new Date(msg.created_at).toLocaleTimeString()}
-                          </div>
-                          <div className="whitespace-pre-wrap break-words">
-                            {msg.content}
-                          </div>
+                        <div className="text-xs opacity-70 mb-1">
+                          {msg.user.email} • {new Date(msg.created_at).toLocaleTimeString()}
+                        </div>
+                        <div className="whitespace-pre-wrap break-words">
+                          {msg.content}
                         </div>
                       </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </ScrollArea>
-                <div className="space-y-6">
-                  <form onSubmit={async (e) => {
-                    e.preventDefault();
-                    if (!message.trim() || isSending) return;
-                    await sendMessage();
-                  }} className="space-y-2">
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="flex-shrink-0"
-                        disabled={!ticket?.assigned_to || isSending}
-                        onClick={() => setIsTemplateDialogOpen(true)}
-                      >
-                        <ListChecks className="w-4 h-4" />
-                      </Button>
-                      <Textarea
-                        placeholder={ticket?.assigned_to 
-                          ? "Type your message..." 
-                          : "Assign an agent before sending messages..."}
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        className="min-h-[80px]"
-                        disabled={!ticket?.assigned_to || isSending}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            if (!message.trim() || isSending) return;
-                            sendMessage();
-                          }
-                        }}
-                      />
-                      <Button 
-                        type="submit"
-                        className="flex-shrink-0"
-                        disabled={!ticket?.assigned_to || isSending || !message.trim()}
-                      >
-                        <Send className="w-4 h-4" />
-                      </Button>
                     </div>
-                  </form>
+                  ))}
+                  <div ref={messagesEndRef} />
                 </div>
-              </TabsContent>
+              </ScrollArea>
+              <div className="space-y-6">
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!message.trim() || isSending) return;
+                  await sendMessage();
+                }} className="space-y-2">
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="flex-shrink-0"
+                      disabled={!ticket?.assigned_to || isSending}
+                      onClick={() => setIsTemplateDialogOpen(true)}
+                    >
+                      <ListChecks className="w-4 h-4" />
+                    </Button>
+                    <Textarea
+                      placeholder={ticket?.assigned_to 
+                        ? "Type your message..." 
+                        : "No agent assigned..."}
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      className="min-h-[80px]"
+                      disabled={!ticket?.assigned_to || isSending}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          if (!message.trim() || isSending || !ticket) return;
+                          sendMessage();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="submit"
+                      size="icon"
+                      className="flex-shrink-0"
+                      disabled={!message.trim() || !ticket?.assigned_to || isSending}
+                    >
+                      {isSending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </TabsContent>
 
-              {/* Email Tab Content */}
-              <TabsContent value="email" className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium">Email History</h3>
-                  <Button onClick={() => {
-                    setEmailForm(prev => ({
-                      ...prev,
-                      to: ticket.customer?.email || "",
-                      subject: `Re: ${ticket.title}`
-                    }));
-                    setIsEmailDialogOpen(true);
-                  }}>
+            {/* Email Tab Content */}
+            <TabsContent value="email">
+              <div className="space-y-4">
+                <div className="flex justify-end">
+                  <Button onClick={() => setIsEmailDialogOpen(true)}>
                     <Plus className="w-4 h-4 mr-2" />
                     New Email
                   </Button>
                 </div>
-                
-                <ScrollArea className="h-[400px]">
-                  <div className="space-y-4">
-                    {emails.length === 0 ? (
-                      <div className="text-center text-muted-foreground py-8">
-                        No emails sent yet
-                      </div>
-                    ) : (
-                      emails.map((email) => (
-                        <Card key={email.id}>
-                          <CardHeader>
-                            <div className="flex justify-between items-start">
-                              <div className="space-y-1">
-                                <CardTitle>{email.subject}</CardTitle>
-                                <div className="text-sm text-muted-foreground">
-                                  From: {email.user.email}
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                  To: {email.to_email}
-                                </div>
-                                {email.cc && (
-                                  <div className="text-sm text-muted-foreground">
-                                    CC: {email.cc}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                {new Date(email.created_at).toLocaleString()}
-                              </div>
-                            </div>
-                          </CardHeader>
-                          <CardContent>
-                            <p className="whitespace-pre-wrap">{email.body}</p>
-                          </CardContent>
-                        </Card>
-                      ))
-                    )}
-                  </div>
-                </ScrollArea>
-              </TabsContent>
-            </Tabs>
-          </CardHeader>
-        </Card>
-
-        {/* Bottom Section - Internal Notes and Tags */}
-        <div className="grid grid-cols-2 gap-6">
-          {/* Internal Notes */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Internal Notes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <form onSubmit={addInternalNote} className="flex gap-2">
-                  <Textarea
-                    placeholder="Add an internal note..."
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    className="min-h-[80px]"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        addInternalNote(e);
-                      }
-                    }}
-                  />
-                  <Button 
-                    type="submit" 
-                    className="flex-shrink-0"
-                    disabled={isAddingNote || !newNote.trim()}
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </form>
-
-                <ScrollArea className="h-[300px] pr-4">
-                  <div className="space-y-4">
-                    {internalNotes.map((note) => (
-                      <div key={note.id} className="bg-muted rounded-lg p-3">
-                        <div className="text-sm font-medium">{note.user.email}</div>
-                        <div className="text-xs text-muted-foreground mb-2">
-                          {new Date(note.created_at).toLocaleString()}
-                        </div>
-                        <p className="text-sm whitespace-pre-wrap">{note.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Tags */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0">
-              <CardTitle>Tags</CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsTagDialogOpen(true)}
-              >
-                <Plus className="w-4 h-4" />
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {ticketTags.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No tags yet. Click + to add tags.
+                {emails.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8">
+                    No emails sent yet
                   </div>
                 ) : (
-                  ticketTags.map((tag) => (
-                    <Badge
-                      key={tag.id}
-                      variant="secondary"
-                      className={cn(
-                        "flex items-center gap-1 group relative pr-6",
-                        // Find matching template tag (case-insensitive)
-                        Object.entries(TAG_COLORS).find(
-                          ([name]) => name.toLowerCase() === tag.name.toLowerCase()
-                        )
-                          ? cn(
-                              Object.entries(TAG_COLORS).find(
-                                ([name]) => name.toLowerCase() === tag.name.toLowerCase()
-                              )![1].bg,
-                              Object.entries(TAG_COLORS).find(
-                                ([name]) => name.toLowerCase() === tag.name.toLowerCase()
-                              )![1].text,
-                              Object.entries(TAG_COLORS).find(
-                                ([name]) => name.toLowerCase() === tag.name.toLowerCase()
-                              )![1].hover
-                            )
-                          : "bg-secondary hover:bg-secondary/80" // Default style for custom tags
-                      )}
-                    >
-                      {tag.name}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-4 w-4 p-0 absolute right-1 opacity-70 hover:opacity-100"
-                        onClick={() => removeTagFromTicket(tag.id)}
-                      >
-                        <X className="w-3 h-3" />
-                      </Button>
-                    </Badge>
+                  emails.map((email) => (
+                    <Card key={email.id}>
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div className="space-y-1">
+                            <CardTitle>{email.subject}</CardTitle>
+                            <div className="text-sm text-muted-foreground">
+                              From: {email.user.email}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              To: {email.to_email}
+                            </div>
+                            {email.cc && (
+                              <div className="text-sm text-muted-foreground">
+                                CC: {email.cc}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {new Date(email.created_at).toLocaleString()}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="whitespace-pre-wrap">{email.body}</p>
+                      </CardContent>
+                    </Card>
                   ))
                 )}
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </TabsContent>
+          </Tabs>
+        </CardHeader>
+      </Card>
+
+      {/* Bottom Section - Internal Notes and Tags */}
+      <div className="grid grid-cols-2 gap-6">
+        {/* Internal Notes */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Internal Notes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={addInternalNote} className="space-y-4">
+              <div className="flex gap-2">
+                <Textarea
+                  placeholder="Add an internal note..."
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  className="min-h-[80px]"
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!newNote.trim() || isAddingNote}
+                >
+                  {isAddingNote ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+              <div className="space-y-4">
+                {internalNotes.map((note) => (
+                  <div key={note.id} className="bg-muted rounded-lg p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="text-sm font-medium">
+                        {note.user.email}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {new Date(note.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                    <p className="text-sm whitespace-pre-wrap">{note.content}</p>
+                  </div>
+                ))}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
+        {/* Tags */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle>Tags</CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsTagDialogOpen(true)}
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {ticketTags.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  No tags yet. Click + to add tags.
+                </div>
+              ) : (
+                ticketTags.map((tag) => (
+                  <Badge
+                    key={tag.id}
+                    variant="secondary"
+                    className={cn(
+                      "flex items-center gap-1 group relative pr-6",
+                      Object.entries(TAG_COLORS).find(
+                        ([name]) => name.toLowerCase() === tag.name.toLowerCase()
+                      )
+                        ? cn(
+                            Object.entries(TAG_COLORS).find(
+                              ([name]) => name.toLowerCase() === tag.name.toLowerCase()
+                            )![1].bg,
+                            Object.entries(TAG_COLORS).find(
+                              ([name]) => name.toLowerCase() === tag.name.toLowerCase()
+                            )![1].text,
+                            Object.entries(TAG_COLORS).find(
+                              ([name]) => name.toLowerCase() === tag.name.toLowerCase()
+                            )![1].hover
+                          )
+                        : "bg-secondary hover:bg-secondary/80"
+                    )}
+                  >
+                    {tag.name}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-4 w-4 p-0 absolute right-1 opacity-70 hover:opacity-100"
+                      onClick={() => removeTagFromTicket(tag.id)}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </Badge>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tag Selection Dialog */}
@@ -1284,7 +1322,7 @@ export default function TicketDetailsPage() {
         </Command>
       </CommandDialog>
 
-      {/* Email Composition Dialog */}
+      {/* Email Dialog */}
       <Dialog open={isEmailDialogOpen} onOpenChange={setIsEmailDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -1382,6 +1420,6 @@ export default function TicketDetailsPage() {
           </CommandList>
         </Command>
       </CommandDialog>
-    </RoleGate>
+    </div>
   );
 } 
