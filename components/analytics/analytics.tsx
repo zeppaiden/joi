@@ -283,134 +283,105 @@ export function Analytics() {
         </TabsContent>
 
         <TabsContent value="tickets" className="space-y-6">
-          {/* Two Column Layout for Charts */}
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Ticket Volume Chart */}
-            <Card>
+          {/* Charts Section */}
+          <div className="grid gap-6 sm:grid-cols-1 lg:grid-cols-2">
+            {/* Daily Ticket Volume */}
+            <Card className="flex flex-col">
               <CardHeader>
                 <CardTitle>Daily Ticket Volume</CardTitle>
               </CardHeader>
-              <CardContent>
-                <ChartContainer 
-                  className="h-[300px]"
+              <CardContent className="flex-1">
+                <ChartContainer
                   config={{
                     tickets: {
-                      theme: {
-                        light: "hsl(var(--primary))",
-                        dark: "hsl(var(--primary))"
-                      }
+                      label: "Tickets",
+                      color: "hsl(221.2 83.2% 53.3%)"
                     }
                   }}
+                  className="aspect-[4/3]"
                 >
                   <LineChart data={data.ticketMetrics.dailyTickets}>
-                    <XAxis 
-                      dataKey="date" 
-                      tickFormatter={(value) => new Date(value).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    />
+                    <XAxis dataKey="date" />
                     <YAxis />
-                    <Line 
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Line
                       type="monotone"
                       dataKey="count"
-                      stroke="var(--color-tickets)"
+                      name="tickets"
+                      stroke="hsl(221.2 83.2% 53.3%)"
                       strokeWidth={2}
-                    />
-                    <ChartTooltip
-                      content={({ active, payload }) => 
-                        active && payload?.length ? (
-                          <div className="rounded-lg border bg-background p-2 shadow-sm">
-                            <div className="grid grid-cols-2 gap-2">
-                              <span className="font-medium">Date:</span>
-                              <span>{new Date(payload[0].payload.date).toLocaleDateString()}</span>
-                              <span className="font-medium">Tickets:</span>
-                              <span>{payload[0].value}</span>
-                            </div>
-                          </div>
-                        ) : null
-                      }
+                      activeDot={{ r: 4 }}
                     />
                   </LineChart>
                 </ChartContainer>
               </CardContent>
             </Card>
 
-            {/* Priority Distribution */}
-            <Card>
+            {/* Ticket Priority Distribution */}
+            <Card className="flex flex-col">
               <CardHeader>
                 <CardTitle>Ticket Priority Distribution</CardTitle>
               </CardHeader>
-              <CardContent>
-                <ChartContainer 
-                  className="h-[300px]"
+              <CardContent className="flex-1">
+                <ChartContainer
                   config={{
                     low: {
-                      theme: {
-                        light: "#22c55e",
-                        dark: "#22c55e"
-                      }
+                      label: "Low",
+                      color: "hsl(142.1 76.2% 36.3%)"
                     },
                     medium: {
-                      theme: {
-                        light: "#eab308",
-                        dark: "#eab308"
-                      }
+                      label: "Medium", 
+                      color: "hsl(47.9 95.8% 53.1%)"
                     },
                     high: {
-                      theme: {
-                        light: "#f97316",
-                        dark: "#f97316"
-                      }
+                      label: "High",
+                      color: "hsl(24.6 95% 53.1%)"
                     },
                     urgent: {
-                      theme: {
-                        light: "#ef4444",
-                        dark: "#ef4444"
-                      }
+                      label: "Urgent",
+                      color: "hsl(0 72.2% 50.6%)"
                     }
                   }}
+                  className="aspect-[4/3]"
                 >
                   <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent />} />
                     <Pie
-                      data={Object.entries(data.ticketMetrics.byPriority).map(([priority, count]) => ({
-                        name: priority,
-                        value: count
-                      }))}
+                      data={[
+                        { name: "low", value: data.ticketMetrics.byPriority.low, fill: "hsl(142.1 76.2% 36.3%)" },
+                        { name: "medium", value: data.ticketMetrics.byPriority.medium, fill: "hsl(47.9 95.8% 53.1%)" },
+                        { name: "high", value: data.ticketMetrics.byPriority.high, fill: "hsl(24.6 95% 53.1%)" },
+                        { name: "urgent", value: data.ticketMetrics.byPriority.urgent, fill: "hsl(0 72.2% 50.6%)" }
+                      ]}
                       dataKey="value"
                       nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={100}
-                    >
-                      {Object.keys(data.ticketMetrics.byPriority).map((priority) => (
-                        <Cell key={priority} fill={`var(--color-${priority})`} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip
-                      content={({ active, payload }) => 
-                        active && payload?.length ? (
-                          <div className="rounded-lg border bg-background p-2 shadow-sm">
-                            <div className="grid grid-cols-2 gap-2">
-                              <span className="font-medium">Priority:</span>
-                              <span className="capitalize">{payload[0].name}</span>
-                              <span className="font-medium">Count:</span>
-                              <span>{payload[0].value}</span>
-                            </div>
-                          </div>
-                        ) : null
-                      }
+                      innerRadius={60}
+                      outerRadius={80}
                     />
                   </PieChart>
                 </ChartContainer>
                 <div className="mt-4 grid grid-cols-2 gap-4">
-                  {Object.entries(data.ticketMetrics.byPriority).map(([priority, count]) => (
-                    <div key={priority} className="flex items-center gap-2">
-                      <div 
-                        className="h-3 w-3 rounded-full" 
-                        style={{ backgroundColor: `var(--color-${priority})` }}
-                      />
-                      <span className="text-sm capitalize">{priority}</span>
-                      <span className="text-sm text-muted-foreground ml-auto">{count}</span>
-                    </div>
-                  ))}
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-[hsl(142.1_76.2%_36.3%)]" />
+                    <span>Low</span>
+                    <span className="ml-auto">{data.ticketMetrics.byPriority.low}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-[hsl(47.9_95.8%_53.1%)]" />
+                    <span>Medium</span>
+                    <span className="ml-auto">{data.ticketMetrics.byPriority.medium}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-[hsl(24.6_95%_53.1%)]" />
+                    <span>High</span>
+                    <span className="ml-auto">{data.ticketMetrics.byPriority.high}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-full bg-[hsl(0_72.2%_50.6%)]" />
+                    <span>Urgent</span>
+                    <span className="ml-auto">{data.ticketMetrics.byPriority.urgent}</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
