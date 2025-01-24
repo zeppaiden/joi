@@ -3,12 +3,20 @@ import { notFound } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CustomerTicketChat } from "@/components/customer/customer-ticket-chat";
+import { Metadata } from "next";
 
-export default async function CustomerTicketPage({
-  params,
-}: {
-  params: { id: string }
-}) {
+type Props = {
+  params: {
+    id: string;
+  };
+};
+
+export const metadata: Metadata = {
+  title: "Ticket Details",
+  description: "View and manage ticket details",
+};
+
+export default async function CustomerTicketPage({ params }: Props) {
   const { id } = params;
   const supabase = await createClient();
 
