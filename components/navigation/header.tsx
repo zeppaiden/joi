@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Search, Bell, Menu, LogOut } from "lucide-react";
+import { Search, LogOut } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
@@ -54,9 +54,6 @@ export function Header() {
       <div className="container mx-auto max-w-7xl px-4 py-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center flex-1 max-w-xl">
-            <button className="md:hidden p-2 mr-2">
-              <Menu className="w-6 h-6" />
-            </button>
             <div className="w-full relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5" />
               <input
@@ -72,10 +69,6 @@ export function Header() {
             </div>
           </div>
           <div className="flex items-center space-x-4">
-            <button className="relative p-2">
-              <Bell className="w-6 h-6" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
             <Button 
               variant="ghost" 
               size="icon"
