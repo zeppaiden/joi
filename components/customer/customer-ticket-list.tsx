@@ -32,7 +32,7 @@ export function CustomerTicketList({ initialTickets }: CustomerTicketListProps) 
   const [searchQuery, setSearchQuery] = useState("");
   const [tickets, setTickets] = useState(initialTickets);
   const { toast } = useToast();
-  const supabase = createClient();
+  const supabaseClient = createClient();
 
   console.log('CustomerTicketList - Initial Mount:', {
     initialTicketCount: initialTickets.length,
@@ -50,7 +50,7 @@ export function CustomerTicketList({ initialTickets }: CustomerTicketListProps) 
     
     // Get current user
     const getCurrentUser = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser();
+      const { data: { user }, error } = await supabaseClient.auth.getUser();
       if (error) {
         console.error('CustomerTicketList - Auth Error:', error);
         return;
@@ -74,7 +74,7 @@ export function CustomerTicketList({ initialTickets }: CustomerTicketListProps) 
         filter: `customer_id=eq.${user.id}`
       });
 
-      const ticketSubscription = supabase
+      const ticketSubscription = supabaseClient
         .channel('customer-tickets')
         .on(
           'postgres_changes',
@@ -96,7 +96,7 @@ export function CustomerTicketList({ initialTickets }: CustomerTicketListProps) 
               case 'INSERT': {
                 // Fetch the complete ticket data including relations
                 console.log('CustomerTicketList - Fetching new ticket details:', payload.new.id);
-                const { data: newTicket, error: fetchError } = await supabase
+                const { data: newTicket, error: fetchError } = await supabaseClient
                   .from('tickets')
                   .select(`
                     *,
@@ -157,7 +157,7 @@ export function CustomerTicketList({ initialTickets }: CustomerTicketListProps) 
                 }
 
                 // Handle regular updates
-                const { data: updatedTicket, error: updateError } = await supabase
+                const { data: updatedTicket, error: updateError } = await supabaseClient
                   .from('tickets')
                   .select(`
                     *,
@@ -240,7 +240,7 @@ export function CustomerTicketList({ initialTickets }: CustomerTicketListProps) 
     return () => {
       if (subscription) {
         console.log('CustomerTicketList - Cleaning up subscription');
-        supabase.removeChannel(subscription);
+        supabaseClient.removeChannel(subscription);
       }
     };
   }, [toast]);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, memo, useEffect } from "react";
+import React, { useState, memo, useEffect, useCallback } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useSearchParams } from "next/navigation";
@@ -9,8 +9,8 @@ import { createClient } from "@/utils/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 
 // Memoized ticket row component
 const TicketRow = memo(({ ticket }: { ticket: TicketWithComputed }) => (
@@ -146,65 +146,55 @@ export function TicketDashboard() {
     searchQuery: searchQuery
   });
 
-  // Fetch tickets function
-  async function loadTickets(isRetry = false) {
+  const supabaseClient = createClient();
+  const { toast } = useToast();
+  
+  // Load tickets
+  const loadTickets = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
     try {
-      if (!isRetry) {
-        setIsLoading(true);
-      } else {
-        setIsRefreshing(true);
-      }
+      const { data: ticketsData, error: ticketsError } = await supabaseClient
+        .from('tickets')
+        .select(`
+          *,
+          customer:users!tickets_customer_id_fkey (
+            id,
+            email,
+            role
+          ),
+          agent:users!tickets_assigned_to_fkey (
+            id,
+            email,
+            role
+          ),
+          organization:organizations (
+            id,
+            name
+          )
+        `)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false });
 
-      const supabase = createClient();
-
-      // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
-      if (!user) throw new Error("Not authenticated");
-
-      // Start with base query
-      let query = supabase
-        .from("tickets")
-        .select("*")
-        .is("deleted_at", null);
-      
-      // Apply filters
-      if (filters.assignedToMe) {
-        query = query.eq("assigned_to", user.id);
-      }
-      if (filters.status && filters.status.length > 0) {
-        query = query.in("status", filters.status);
-      }
-      if (filters.priority && filters.priority.length > 0) {
-        query = query.in("priority_level", filters.priority);
-      }
-      if (filters.searchQuery) {
-        query = query.ilike("title", `%${filters.searchQuery}%`);
-      }
-
-      const { data: fetchedTickets, error: ticketsError } = await query.order("created_at", { ascending: false });
       if (ticketsError) throw ticketsError;
-
-      // Add computed fields
-      const processedTickets = (fetchedTickets || []).map(ticket => ({
-        ...ticket,
-        timeElapsed: formatDistanceToNow(new Date(ticket.created_at), { addSuffix: true }),
-        isOverdue: ticket.status !== "closed" && new Date(ticket.created_at) < new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-      }));
-
-      setTickets(processedTickets);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error("Failed to fetch tickets"));
+      setTickets(ticketsData as any);
+    } catch (error) {
+      console.error('Error loading tickets:', error);
+      setError(error as Error);
+      toast({
+        title: "Error",
+        description: "Failed to load tickets",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
     }
-  }
+  }, [supabaseClient, toast]);
 
   // Initial load and filter changes
   useEffect(() => {
-    loadTickets();
+    setIsRefreshing(true);
+    loadTickets().finally(() => setIsRefreshing(false));
   }, [filters, loadTickets]);
 
   // Update search query when URL param changes
@@ -246,7 +236,7 @@ export function TicketDashboard() {
   };
 
   if (error) {
-    return <DashboardError error={error} onRetry={() => loadTickets(true)} />;
+    return <DashboardError error={error} onRetry={() => loadTickets()} />;
   }
 
   if (isLoading) {
