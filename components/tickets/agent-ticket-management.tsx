@@ -74,12 +74,9 @@ const STATUS_ORDER = {
 export function AgentTicketManagement() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isFilterDialogOpen, setIsFilterDialogOpen] = useState(false);
-  const [agents, setAgents] = useState<User[]>([]);
-  const [customers, setCustomers] = useState<User[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [customers, setCustomers] = useState<User[]>([]);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: "created_at", direction: "desc" });
   const [filterConfig, setFilterConfig] = useState<FilterConfig>({
     status: null,
@@ -93,10 +90,10 @@ export function AgentTicketManagement() {
   });
   const supabase = createClient();
 
-  // Load users and tickets
+  // Load tickets and customers
   const loadData = useCallback(async () => {
-    setIsLoading(true);
     try {
+      // Load tickets
       const { data: ticketsData, error: ticketsError } = await supabase
         .from('tickets')
         .select(`
@@ -120,15 +117,22 @@ export function AgentTicketManagement() {
 
       if (ticketsError) throw ticketsError;
       setTickets(ticketsData as any);
+
+      // Load customers
+      const { data: customersData, error: customersError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('role', 'customer');
+
+      if (customersError) throw customersError;
+      setCustomers(customersData);
     } catch (error) {
-      console.error('Error loading tickets:', error);
+      console.error('Error loading data:', error);
       toast({
         title: "Error",
-        description: "Failed to load tickets",
+        description: "Failed to load data",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   }, [supabase, toast]);
 
@@ -222,38 +226,6 @@ export function AgentTicketManagement() {
       assignedToFilter: "all",
       customerFilter: "all"
     });
-  };
-
-  // Update ticket
-  const updateTicket = async (ticketId: string, updates: Partial<Ticket>) => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('tickets')
-        .update(updates)
-        .eq('id', ticketId)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Ticket updated successfully",
-      });
-      
-      loadData();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error 
-          ? `Failed to update ticket: ${error.message}`
-          : "Failed to update ticket",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   return (

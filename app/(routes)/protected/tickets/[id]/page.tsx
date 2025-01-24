@@ -17,9 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Command,
   CommandDialog,
-  CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
@@ -172,7 +170,7 @@ export default function TicketDetailsPage() {
         if (messagesError) throw messagesError;
 
         // Get all available tags
-        const { data: tagsData } = await supabase
+        const { data: _ } = await supabase
           .from('tags')
           .select('*')
           .is('deleted_at', null)
@@ -422,34 +420,6 @@ export default function TicketDetailsPage() {
       toast({
         title: "Error",
         description: "Failed to create tag",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Delete tag
-  const deleteTag = async (tagId: string) => {
-    try {
-      const { error } = await supabase
-        .from('tags')
-        .update({ deleted_at: new Date().toISOString() })
-        .eq('id', tagId);
-
-      if (error) throw error;
-
-      // Remove from local state
-      setTicketTags(prev => prev.filter(t => t.id !== tagId));
-
-      toast({
-        title: "Success",
-        description: "Tag deleted successfully",
-        variant: "default",
-      });
-    } catch (error) {
-      console.error('Error deleting tag:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete tag",
         variant: "destructive",
       });
     }

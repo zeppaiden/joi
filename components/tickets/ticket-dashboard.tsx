@@ -205,7 +205,7 @@ export function TicketDashboard() {
   // Initial load and filter changes
   useEffect(() => {
     loadTickets();
-  }, [filters]);
+  }, [filters, loadTickets]);
 
   // Update search query when URL param changes
   useEffect(() => {
