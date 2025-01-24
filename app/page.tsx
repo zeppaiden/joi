@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Bot, Sparkles, Users, Clock, Shield } from "lucide-react";
+import { ArrowRight, Bot, Sparkles, Users, Clock } from "lucide-react";
 
 export default function Home() {
   return (

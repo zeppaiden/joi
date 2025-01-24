@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, memo, useEffect } from "react";
-import { AlertCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useSearchParams } from "next/navigation";
 import { TicketWithComputed } from "@/types/tickets";

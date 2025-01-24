@@ -8,36 +8,28 @@ const profileUpdateSchema = z.object({
 });
 
 // Get user profile
-export async function GET(req: Request) {
-  try {
-    const supabase = await createClient();
-    
-    // Check auth
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get user profile
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, email, role, created_at')
-      .eq('id', user.id)
-      .single();
-
-    if (error) throw error;
-    if (!data) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error('Failed to get user profile:', error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to get user profile' },
-      { status: 500 }
-    );
+export async function GET() {
+  const supabase = await createClient();
+  
+  // Check auth
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Get user profile
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, email, role, created_at')
+    .eq('id', user.id)
+    .single();
+
+  if (error) throw error;
+  if (!data) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 });
+  }
+
+  return NextResponse.json(data);
 }
 
 // Update user profile

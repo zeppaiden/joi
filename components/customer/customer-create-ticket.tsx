@@ -35,7 +35,7 @@ export function CustomerCreateTicket({ userId, organizations }: CustomerCreateTi
       const title = formData.get('title') as string;
       const description = formData.get('description') as string;
 
-      const { data: ticketData, error: ticketError } = await supabase
+      const { error: ticketError } = await supabase
         .from('tickets')
         .insert({
           id: crypto.randomUUID(),

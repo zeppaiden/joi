@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Send, Plus, X, Paperclip, ListChecks, Loader2 } from "lucide-react";
+import { ArrowLeft, Send, Plus, X, ListChecks, Loader2 } from "lucide-react";
 import { Database } from "@/types/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";

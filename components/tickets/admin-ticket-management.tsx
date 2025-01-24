@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Plus, Trash2, Filter, ArrowUpDown, X, ArrowUp, ArrowDown, ListChecks, Paperclip } from "lucide-react";
+import { Plus, Trash2, Filter, ArrowUpDown, ArrowUp, ArrowDown, ListChecks, Paperclip } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 import { Button } from "@/components/ui/button";
