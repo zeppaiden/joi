@@ -5,11 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { CustomerTicketChat } from "@/components/customer/customer-ticket-chat";
 import { Metadata } from "next";
 
+type SegmentParams = {
+  id: string;
+};
+
 interface PageProps {
-  params: {
-    id: string;
-  };
-  searchParams?: { [key: string]: string | string[] | undefined };
+  params: Promise<SegmentParams>;
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export const metadata: Metadata = {
@@ -18,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 export default async function CustomerTicketPage({ params }: PageProps) {
-  const { id } = params;
+  const { id } = await params;
   const supabase = await createClient();
 
   // Get current user using the secure method
