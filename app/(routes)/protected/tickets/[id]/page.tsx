@@ -1170,21 +1170,23 @@ export default function TicketDetailsPage() {
                   )}
                 </Button>
               </div>
-              <div className="space-y-4">
-                {internalNotes.map((note) => (
-                  <div key={note.id} className="bg-muted rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="text-sm font-medium">
-                        {note.user.email}
+              <ScrollArea className="h-[400px] pr-4">
+                <div className="space-y-4">
+                  {internalNotes.map((note) => (
+                    <div key={note.id} className="bg-muted rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="text-sm font-medium">
+                          {note.user.email}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(note.created_at).toLocaleString()}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(note.created_at).toLocaleString()}
-                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{note.content}</p>
                     </div>
-                    <p className="text-sm whitespace-pre-wrap">{note.content}</p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </ScrollArea>
             </form>
           </CardContent>
         </Card>
