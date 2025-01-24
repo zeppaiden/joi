@@ -93,6 +93,10 @@ export function AgentTicketManagement() {
   // Load tickets and customers
   const loadData = useCallback(async () => {
     try {
+      // Get current user
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) return;
+
       // Load tickets
       const { data: ticketsData, error: ticketsError } = await supabase
         .from('tickets')
@@ -113,6 +117,7 @@ export function AgentTicketManagement() {
             name
           )
         `)
+        .eq('assigned_to', currentUser.id)
         .is('deleted_at', null);
 
       if (ticketsError) throw ticketsError;
@@ -140,6 +145,241 @@ export function AgentTicketManagement() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Set up real-time subscription
+  useEffect(() => {
+    const supabase = createClient();
+
+    // Get current user
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Helper function to fetch complete ticket data
+      const handleTicketChange = async (payload: any) => {
+        const { data: newTicket } = await supabase
+          .from('tickets')
+          .select(`
+            *,
+            customer:users!tickets_customer_id_fkey (
+              id,
+              email,
+              role
+            ),
+            agent:users!tickets_assigned_to_fkey (
+              id,
+              email,
+              role
+            ),
+            organization:organizations (
+              id,
+              name
+            )
+          `)
+          .eq('id', payload.new.id)
+          .single();
+
+        if (newTicket) {
+          console.log('Agent Dashboard - Adding new ticket:', newTicket);
+          setTickets(current => [newTicket as Ticket, ...current]);
+          toast({
+            title: "New Ticket Assigned",
+            description: `Ticket "${newTicket.title}" has been assigned to you`,
+          });
+        }
+      };
+
+      // Subscribe to both ticket changes and organization membership changes
+      const subscriptions = supabase
+        .channel('agent-realtime')
+        // Organization membership changes
+        .on(
+          'postgres_changes',
+          {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'organization_members',
+            filter: `user_id=eq.${user.id}`
+          },
+          async (payload) => {
+            console.log('Agent Dashboard - Organization membership removed:', payload);
+            
+            // Fetch organization details
+            const { data: org } = await supabase
+              .from('organizations')
+              .select('name')
+              .eq('id', payload.old.organization_id)
+              .single();
+
+            // Remove tickets from this organization
+            setTickets(current => {
+              const filteredTickets = current.filter(ticket => 
+                ticket.organization?.id !== payload.old.organization_id
+              );
+              console.log('Agent Dashboard - Removing tickets after org removal:', {
+                organizationId: payload.old.organization_id,
+                removedTickets: current.length - filteredTickets.length
+              });
+              return filteredTickets;
+            });
+
+            // Notify the agent
+            toast({
+              title: "Organization Access Removed",
+              description: `You have been removed from ${org?.name || 'an organization'}`,
+              variant: "destructive"
+            });
+          }
+        )
+        // Ticket changes (existing subscription)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'tickets',
+            filter: `assigned_to=eq.${user.id}`
+          },
+          async (payload) => {
+            console.log('Agent Dashboard - New ticket received:', payload);
+            await handleTicketChange(payload);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'tickets'
+          },
+          async (payload) => {
+            console.log('Agent Dashboard - Ticket update received:', {
+              old: payload.old,
+              new: payload.new,
+              wasAssignedToMe: payload.old.assigned_to !== user.id && payload.new.assigned_to === user.id,
+              wasUnassignedFromMe: payload.old.assigned_to === user.id && payload.new.assigned_to !== user.id
+            });
+
+            // Handle newly assigned tickets
+            if (payload.old.assigned_to !== user.id && payload.new.assigned_to === user.id) {
+              const { data: newTicket } = await supabase
+                .from('tickets')
+                .select(`
+                  *,
+                  customer:users!tickets_customer_id_fkey (
+                    id,
+                    email,
+                    role
+                  ),
+                  agent:users!tickets_assigned_to_fkey (
+                    id,
+                    email,
+                    role
+                  ),
+                  organization:organizations (
+                    id,
+                    name
+                  )
+                `)
+                .eq('id', payload.new.id)
+                .single();
+
+              if (newTicket) {
+                console.log('Agent Dashboard - Adding newly assigned ticket:', newTicket);
+                setTickets(current => [newTicket as Ticket, ...current]);
+                toast({
+                  title: "New Ticket Assigned",
+                  description: `Ticket "${newTicket.title}" has been assigned to you`,
+                });
+              }
+              return;
+            }
+
+            // Handle unassigned tickets
+            if (payload.old.assigned_to === user.id && payload.new.assigned_to !== user.id) {
+              console.log('Agent Dashboard - Removing unassigned ticket:', payload.new.id);
+              setTickets(current => current.filter(ticket => ticket.id !== payload.new.id));
+              toast({
+                title: "Ticket Unassigned",
+                description: "A ticket has been unassigned from you",
+              });
+              return;
+            }
+
+            // Handle regular updates to assigned tickets
+            if (payload.new.assigned_to === user.id) {
+              const { data: updatedTicket } = await supabase
+                .from('tickets')
+                .select(`
+                  *,
+                  customer:users!tickets_customer_id_fkey (
+                    id,
+                    email,
+                    role
+                  ),
+                  agent:users!tickets_assigned_to_fkey (
+                    id,
+                    email,
+                    role
+                  ),
+                  organization:organizations (
+                    id,
+                    name
+                  )
+                `)
+                .eq('id', payload.new.id)
+                .single();
+
+              if (updatedTicket) {
+                console.log('Agent Dashboard - Updating existing ticket:', updatedTicket);
+                setTickets(current =>
+                  current.map(ticket =>
+                    ticket.id === updatedTicket.id ? updatedTicket as Ticket : ticket
+                  )
+                );
+              }
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'DELETE',
+            schema: 'public',
+            table: 'tickets',
+            filter: `assigned_to=eq.${user.id}`
+          },
+          (payload) => {
+            console.log('Agent Dashboard - Ticket deletion received:', payload);
+            setTickets(current =>
+              current.filter(ticket => ticket.id !== payload.old.id)
+            );
+            toast({
+              title: "Ticket Removed",
+              description: "A ticket has been deleted",
+            });
+          }
+        )
+        .subscribe((status) => {
+          console.log('Agent Dashboard - Subscription status:', status);
+        });
+
+      return subscriptions;
+    };
+
+    // Set up subscription
+    let subscription: any;
+    getCurrentUser().then(sub => {
+      subscription = sub;
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (subscription) {
+        supabase.removeChannel(subscription);
+      }
+    };
+  }, [toast]);
 
   // Apply filters and sorting to tickets
   const filteredAndSortedTickets = useCallback(() => {

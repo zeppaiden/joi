@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
@@ -38,9 +38,98 @@ interface CustomerDashboardProps {
   userId: string;
 }
 
-export function CustomerDashboard({ tickets, organizations, userId }: CustomerDashboardProps) {
+export function CustomerDashboard({ tickets: initialTickets, organizations, userId }: CustomerDashboardProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
+  const supabase = createClient();
+
+  // Set up real-time subscription
+  useEffect(() => {
+    if (!userId) return;
+
+    // Subscribe to ticket changes for the current customer
+    const ticketSubscription = supabase
+      .channel('customer-tickets')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tickets',
+          filter: `customer_id=eq.${userId}`
+        },
+        async (payload) => {
+          console.log('Ticket change received:', payload);
+
+          // Handle different types of changes
+          if (payload.eventType === 'INSERT') {
+            // Fetch the complete ticket data including relations
+            const { data: newTicket } = await supabase
+              .from('tickets')
+              .select(`
+                *,
+                organizations (
+                  id,
+                  name
+                )
+              `)
+              .eq('id', payload.new.id)
+              .single();
+
+            if (newTicket) {
+              setTickets(current => [newTicket as Ticket, ...current]);
+              toast({
+                title: "New Ticket Created",
+                description: `A new ticket "${newTicket.title}" has been created for you`,
+              });
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            // Fetch the updated ticket to get the complete data with relations
+            const { data: updatedTicket } = await supabase
+              .from('tickets')
+              .select(`
+                *,
+                organizations (
+                  id,
+                  name
+                )
+              `)
+              .eq('id', payload.new.id)
+              .single();
+
+            if (updatedTicket) {
+              setTickets(current =>
+                current.map(ticket =>
+                  ticket.id === payload.new.id
+                    ? updatedTicket as Ticket
+                    : ticket
+                )
+              );
+
+              // Show toast for important updates
+              if (payload.old.status !== payload.new.status) {
+                toast({
+                  title: "Ticket Updated",
+                  description: `Ticket status changed to ${payload.new.status.replace('_', ' ')}`,
+                });
+              }
+            }
+          } else if (payload.eventType === 'DELETE') {
+            setTickets(current =>
+              current.filter(ticket => ticket.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(ticketSubscription);
+    };
+  }, [userId, toast]);
+
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 

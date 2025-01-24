@@ -113,6 +113,7 @@ export function AdminTicketManagement() {
     assignedToFilter: "all",
     customerFilter: "all",
   });
+  const supabase = createClient();
 
   // Load users and tickets
   const loadData = useCallback(async () => {
@@ -201,6 +202,66 @@ export function AdminTicketManagement() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Set up real-time subscription
+  useEffect(() => {
+    // Subscribe to ticket changes
+    const ticketSubscription = supabase
+      .channel('admin-tickets')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tickets'
+        },
+        async (payload) => {
+          console.log('Ticket change received:', payload);
+
+          // Handle different types of changes
+          if (payload.eventType === 'INSERT') {
+            // Fetch the complete ticket data including relations
+            const { data: newTicket } = await supabase
+              .from('tickets')
+              .select(`
+                *,
+                organizations (
+                  id,
+                  name
+                )
+              `)
+              .eq('id', payload.new.id)
+              .single();
+
+            if (newTicket) {
+              setTickets(current => [newTicket as Ticket, ...current]);
+              toast({
+                title: "New Ticket",
+                description: `Ticket "${newTicket.title}" has been created`,
+              });
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            setTickets(current =>
+              current.map(ticket =>
+                ticket.id === payload.new.id
+                  ? { ...ticket, ...payload.new }
+                  : ticket
+              )
+            );
+          } else if (payload.eventType === 'DELETE') {
+            setTickets(current =>
+              current.filter(ticket => ticket.id !== payload.old.id)
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(ticketSubscription);
+    };
+  }, [toast]);
 
   // Apply filters and sorting to tickets
   const filteredAndSortedTickets = useCallback(() => {
@@ -304,14 +365,17 @@ export function AdminTicketManagement() {
       const supabase = createClient();
       
       // Get current user
+      console.log('Fetching current user...');
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError) {
         console.error('Error getting current user:', userError);
         throw userError;
       }
       if (!user) throw new Error("Not authenticated");
+      console.log('Current user:', { id: user.id, email: user.email });
 
       // Get organization
+      console.log('Fetching organization...');
       const { data: orgData, error: orgError } = await supabase
         .from('organizations')
         .select('id')
@@ -323,8 +387,9 @@ export function AdminTicketManagement() {
         throw orgError;
       }
       if (!orgData) throw new Error("No organization found");
+      console.log('Organization found:', orgData);
 
-      const ticketId = crypto.randomUUID();
+      // Get form data
       const customerId = formData.get('customer_id');
       const assignedTo = formData.get('assigned_to');
       const status = formData.get('status') || 'open';
@@ -333,13 +398,12 @@ export function AdminTicketManagement() {
       const description = formData.get('description');
 
       console.log('Collected form data:', {
-        ticketId,
         customerId,
         assignedTo,
         status,
         priority,
         title,
-        description,
+        description: description ? 'Present' : 'Not present',
         organizationId: orgData.id,
         createdBy: user.id
       });
@@ -347,20 +411,42 @@ export function AdminTicketManagement() {
       if (!customerId) throw new Error("Customer is required");
       if (!title) throw new Error("Title is required");
 
-      const { data, error } = await supabase.from('tickets').insert({
-        id: ticketId,
+      // Prepare ticket data
+      const ticketData = {
+        id: crypto.randomUUID(),
         title: title as string,
-        description: description as string,
+        description: description as string || null,
         status: status as Ticket['status'],
         priority_level: priority as Ticket['priority_level'],
         created_by: user.id,
-        assigned_to: assignedTo ? (assignedTo as string) : null,
         customer_id: customerId as string,
+        assigned_to: assignedTo ? (assignedTo as string) : null,
         organization_id: orgData.id
-      }).select().single();
+      };
+
+      console.log('Attempting to create ticket with data:', ticketData);
+
+      // Create the ticket
+      const { data, error } = await supabase
+        .from('tickets')
+        .insert(ticketData)
+        .select(`
+          *,
+          organizations (
+            id,
+            name
+          )
+        `)
+        .single();
 
       if (error) {
-        console.error('Error creating ticket:', error);
+        console.error('Supabase error creating ticket:', {
+          error,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+          message: error.message
+        });
         throw error;
       }
 
@@ -374,7 +460,11 @@ export function AdminTicketManagement() {
       setIsCreateDialogOpen(false);
       loadData();
     } catch (error) {
-      console.error('Failed to create ticket:', error);
+      console.error('Failed to create ticket:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create ticket",
@@ -807,35 +897,35 @@ export function AdminTicketManagement() {
                       <SelectContent>
                         <SelectItem value="unassigned">Unassigned</SelectItem>
                         {(() => {
-                          console.log('Ticket organization:', {
-                            ticketId: ticket.id,
-                            organizationId: ticket.organization_id,
-                            organizations: ticket.organizations
-                          });
-                          console.log('Available agents:', agents.map(a => ({
-                            email: a.email,
-                            role: a.role,
-                            orgMembers: a.organization_members
-                          })));
+                          // console.log('Ticket organization:', {
+                          //   ticketId: ticket.id,
+                          //   organizationId: ticket.organization_id,
+                          //   organizations: ticket.organizations
+                          // });
+                          // console.log('Available agents:', agents.map(a => ({
+                          //   email: a.email,
+                          //   role: a.role,
+                          //   orgMembers: a.organization_members
+                          // })));
                           
                           const filteredAgents = agents.filter(agent => {
                             const isMember = agent.organization_members?.some(
                               (member: OrganizationMember) => member.organization_id === ticket.organization_id
                             );
-                            console.log('Agent membership check:', {
-                              email: agent.email,
-                              role: agent.role,
-                              isMember,
-                              orgMembers: agent.organization_members,
-                              ticketOrgId: ticket.organization_id
-                            });
+                            // console.log('Agent membership check:', {
+                            //   email: agent.email,
+                            //   role: agent.role,
+                            //   isMember,
+                            //   orgMembers: agent.organization_members,
+                            //   ticketOrgId: ticket.organization_id
+                            // });
                             return isMember;
                           });
 
-                          console.log('Filtered agents:', filteredAgents.map(a => ({
-                            email: a.email,
-                            role: a.role
-                          })));
+                          // console.log('Filtered agents:', filteredAgents.map(a => ({
+                          //   email: a.email,
+                          //   role: a.role
+                          // })));
 
                           return filteredAgents.map((agent) => (
                             <SelectItem key={agent.id} value={agent.id}>

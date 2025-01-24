@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { Search } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface CustomerTicketListProps {
   initialTickets: Array<{
@@ -14,6 +16,7 @@ interface CustomerTicketListProps {
     description: string | null;
     status: string | null;
     created_at: string;
+    customer_id: string;
     organizations: {
       id: string;
       name: string;
@@ -27,8 +30,222 @@ interface CustomerTicketListProps {
 
 export function CustomerTicketList({ initialTickets }: CustomerTicketListProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [tickets, setTickets] = useState(initialTickets);
+  const { toast } = useToast();
+  const supabase = createClient();
+
+  console.log('CustomerTicketList - Initial Mount:', {
+    initialTicketCount: initialTickets.length,
+    tickets: initialTickets.map(t => ({
+      id: t.id,
+      title: t.title,
+      customer_id: t.customer_id,
+      created_at: t.created_at
+    }))
+  });
+
+  // Set up real-time subscription
+  useEffect(() => {
+    console.log('CustomerTicketList - Setting up subscription');
+    
+    // Get current user
+    const getCurrentUser = async () => {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error('CustomerTicketList - Auth Error:', error);
+        return;
+      }
+      if (!user) {
+        console.error('CustomerTicketList - No user found');
+        return;
+      }
+
+      console.log('CustomerTicketList - Client Auth User:', {
+        userId: user.id,
+        email: user.email
+      });
+
+      // Subscribe to ticket changes for the current customer
+      console.log('CustomerTicketList - Creating subscription with config:', {
+        channel: 'customer-tickets',
+        event: '*',
+        schema: 'public',
+        table: 'tickets',
+        filter: `customer_id=eq.${user.id}`
+      });
+
+      const ticketSubscription = supabase
+        .channel('customer-tickets')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'tickets',
+            filter: `customer_id=eq.${user.id}`
+          },
+          async (payload: any) => {
+            console.log('CustomerTicketList - Ticket change received:', {
+              eventType: payload.eventType,
+              old: payload.old,
+              new: payload.new
+            });
+
+            // Handle different types of changes
+            switch (payload.eventType) {
+              case 'INSERT': {
+                // Fetch the complete ticket data including relations
+                console.log('CustomerTicketList - Fetching new ticket details:', payload.new.id);
+                const { data: newTicket, error: fetchError } = await supabase
+                  .from('tickets')
+                  .select(`
+                    *,
+                    organizations (
+                      id,
+                      name
+                    ),
+                    assigned_to:users!assigned_to (
+                      id,
+                      email
+                    )
+                  `)
+                  .eq('id', payload.new.id)
+                  .single();
+
+                if (fetchError) {
+                  console.error('CustomerTicketList - Error fetching new ticket:', fetchError);
+                  return;
+                }
+
+                if (newTicket) {
+                  console.log('CustomerTicketList - Adding new ticket to state:', newTicket);
+                  setTickets(current => [newTicket, ...current]);
+                  toast({
+                    title: "New Ticket Created",
+                    description: `A new ticket "${newTicket.title}" has been created`,
+                  });
+                }
+                break;
+              }
+              
+              case 'UPDATE': {
+                console.log('CustomerTicketList - Processing ticket update:', {
+                  ticketId: payload.new.id,
+                  oldStatus: payload.old?.status,
+                  newStatus: payload.new?.status,
+                  wasDeleted: !payload.old?.deleted_at && payload.new?.deleted_at
+                });
+
+                // Handle soft deletion
+                if (!payload.old?.deleted_at && payload.new?.deleted_at) {
+                  console.log('CustomerTicketList - Handling soft deletion:', payload.new.id);
+                  setTickets(current => {
+                    const filteredTickets = current.filter(ticket => ticket.id !== payload.new.id);
+                    console.log('CustomerTicketList - After soft deletion:', {
+                      removedId: payload.new.id,
+                      previousCount: current.length,
+                      newCount: filteredTickets.length
+                    });
+                    return filteredTickets;
+                  });
+
+                  toast({
+                    title: "Ticket Removed",
+                    description: "This ticket has been deleted.",
+                  });
+                  return;
+                }
+
+                // Handle regular updates
+                const { data: updatedTicket, error: updateError } = await supabase
+                  .from('tickets')
+                  .select(`
+                    *,
+                    organizations (
+                      id,
+                      name
+                    ),
+                    assigned_to:users!assigned_to (
+                      id,
+                      email
+                    )
+                  `)
+                  .eq('id', payload.new.id)
+                  .single();
+
+                if (updateError) {
+                  console.error('CustomerTicketList - Error fetching updated ticket:', updateError);
+                  return;
+                }
+
+                if (updatedTicket) {
+                  console.log('CustomerTicketList - Applying ticket update:', updatedTicket);
+                  setTickets(current =>
+                    current.map(ticket =>
+                      ticket.id === updatedTicket.id ? updatedTicket : ticket
+                    )
+                  );
+
+                  if (payload.old?.status !== payload.new?.status) {
+                    toast({
+                      title: "Ticket Status Updated",
+                      description: `Status changed from ${payload.old?.status || 'unset'} to ${payload.new?.status}`,
+                    });
+                  }
+                }
+                break;
+              }
+
+              case 'DELETE': {
+                console.log('CustomerTicketList - Processing ticket deletion:', {
+                  ticketId: payload.old?.id
+                });
+
+                setTickets(current => {
+                  const filteredTickets = current.filter(ticket => ticket.id !== payload.old?.id);
+                  console.log('CustomerTicketList - After deletion:', {
+                    removedId: payload.old?.id,
+                    previousCount: current.length,
+                    newCount: filteredTickets.length
+                  });
+                  return filteredTickets;
+                });
+
+                toast({
+                  title: "Ticket Removed",
+                  description: "This ticket has been deleted.",
+                });
+                break;
+              }
+            }
+          }
+        )
+        .subscribe((status) => {
+          console.log('CustomerTicketList - Subscription status:', status);
+        });
+
+      return ticketSubscription;
+    };
+
+    // Set up subscription
+    let subscription: any;
+    getCurrentUser().then(sub => {
+      subscription = sub;
+      console.log('CustomerTicketList - Subscription established');
+    }).catch(error => {
+      console.error('CustomerTicketList - Error setting up subscription:', error);
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      if (subscription) {
+        console.log('CustomerTicketList - Cleaning up subscription');
+        supabase.removeChannel(subscription);
+      }
+    };
+  }, [toast]);
   
-  const filteredTickets = initialTickets.filter(ticket => {
+  const filteredTickets = tickets.filter(ticket => {
     const searchLower = searchQuery.toLowerCase();
     return (
       ticket.title.toLowerCase().includes(searchLower) ||
