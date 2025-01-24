@@ -4,13 +4,12 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CustomerTicketChat } from "@/components/customer/customer-ticket-chat";
 
-interface PageProps {
-  params: { id: string };
-  searchParams: { [key: string]: string | string[] | undefined };
-}
-
-export default async function CustomerTicketPage(props: PageProps) {
-  const { id } = props.params;
+export default async function CustomerTicketPage({
+  params,
+}: {
+  params: { id: string }
+}) {
+  const { id } = params;
   const supabase = await createClient();
 
   // Get current user using the secure method
