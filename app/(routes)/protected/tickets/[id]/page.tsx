@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Send, Plus, X, ListChecks, Loader2 } from "lucide-react";
+import { ArrowLeft, Send, Plus, X, ListChecks, Loader2, FileIcon, Download } from "lucide-react";
 import { Database } from "@/types/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -32,13 +32,22 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import Link from "next/link";
 
 type User = Database["public"]["Tables"]["users"]["Row"] & {
   role: 'admin' | 'agent' | 'customer';
 };
 
-type Message = Database["public"]["Tables"]["messages"]["Row"] & {
+type DBMessage = Database["public"]["Tables"]["messages"]["Row"];
+type DBAttachment = Database["public"]["Tables"]["attachments"]["Row"];
+
+type MessageAttachment = DBAttachment & {
+  url: string;
+};
+
+type Message = DBMessage & {
   user: User;
+  attachments?: MessageAttachment[];
 };
 
 type Tag = Database["public"]["Tables"]["tags"]["Row"];
@@ -161,7 +170,19 @@ export default function TicketDetailsPage() {
           .from('messages')
           .select(`
             *,
-            user:users!messages_user_id_fkey(id, email, role)
+            user:users!messages_user_id_fkey (
+              id,
+              email,
+              role,
+              avatar_url,
+              created_at,
+              deleted_at,
+              first_name,
+              last_name,
+              phone_number,
+              timezone,
+              updated_at
+            )
           `)
           .eq('ticket_id', id || '')
           .is('deleted_at', null)
@@ -221,8 +242,44 @@ export default function TicketDetailsPage() {
 
         if (emailsError) throw emailsError;
 
+        // Get attachments for all messages
+        const messageIds = messagesData?.map(msg => msg.id) || [];
+        const { data: attachments } = await supabase
+          .from('attachments')
+          .select('*')
+          .in('message_id', messageIds);
+
+        // Get signed URLs for all attachments
+        const attachmentsWithUrls = await Promise.all(
+          (attachments || []).map(async (attachment) => {
+            const { data: { publicUrl } } = supabase.storage
+              .from('attachments')
+              .getPublicUrl(attachment.storage_path);
+            
+            return {
+              ...attachment,
+              url: publicUrl
+            };
+          })
+        );
+
+        // Group attachments by message_id
+        const attachmentsByMessage = attachmentsWithUrls.reduce((acc, attachment) => {
+          if (!acc[attachment.message_id]) {
+            acc[attachment.message_id] = [];
+          }
+          acc[attachment.message_id].push(attachment);
+          return acc;
+        }, {} as Record<string, MessageAttachment[]>);
+
+        // Combine messages with their attachments
+        const messagesWithAttachments = messagesData?.map(msg => ({
+          ...msg,
+          attachments: attachmentsByMessage[msg.id] || []
+        }));
+
         setTicket(ticketData as unknown as Ticket);
-        setMessages(messagesData as unknown as Message[]);
+        setMessages(messagesWithAttachments as unknown as Message[]);
         setTicketTags(ticketTags);
         setInternalNotes(notesData as unknown as InternalNote[] || []);
         setEmails(emailsData as unknown as Email[]);
@@ -1004,6 +1061,36 @@ export default function TicketDetailsPage() {
                         <div className="whitespace-pre-wrap break-words">
                           {msg.content}
                         </div>
+                        {msg.attachments && msg.attachments.length > 0 && (
+                          <div className="space-y-2 mt-2 border-t pt-2">
+                            {msg.attachments.map((attachment) => (
+                              <div
+                                key={attachment.id}
+                                className="flex items-center gap-2 bg-background/50 rounded p-2 text-sm"
+                              >
+                                <FileIcon className="h-4 w-4 shrink-0" />
+                                <span className="truncate flex-1">
+                                  {attachment.filename}
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  asChild
+                                >
+                                  <a
+                                    href={attachment.url}
+                                    download={attachment.filename}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <Download className="h-3 w-3" />
+                                  </a>
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

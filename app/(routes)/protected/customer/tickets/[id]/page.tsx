@@ -52,20 +52,6 @@ export default async function CustomerTicketPage({ params }: PageProps) {
     return notFound();
   }
 
-  // Get messages for this ticket
-  const { data: messages } = await supabase
-    .from('messages')
-    .select(`
-      *,
-      user:users!messages_user_id_fkey (
-        id,
-        email,
-        role
-      )
-    `)
-    .eq('ticket_id', id)
-    .order('created_at', { ascending: true });
-
   return (
     <div className="container mx-auto py-6 max-w-4xl">
       <Card>
@@ -103,8 +89,7 @@ export default async function CustomerTicketPage({ params }: PageProps) {
           </div>
           
           <CustomerTicketChat 
-            ticket={ticket as any} 
-            initialMessages={messages as any} 
+            ticket={ticket as any}
           />
         </CardContent>
       </Card>

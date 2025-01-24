@@ -226,27 +226,6 @@ function calculateAverageMessagesPerTicket(tickets: any[]): number {
   return totalMessages / tickets.length;
 }
 
-function calculateMostActiveCustomers(tickets: any[]): Array<{ id: string; name: string; ticketCount: number }> {
-  const customerCounts = new Map<string, { count: number; email: string | null }>();
-  
-  tickets.forEach(ticket => {
-    const currentCount = customerCounts.get(ticket.created_by)?.count || 0;
-    customerCounts.set(ticket.created_by, {
-      count: currentCount + 1,
-      email: ticket.customer?.email || null
-    });
-  });
-
-  return Array.from(customerCounts.entries())
-    .map(([id, { count, email }]) => ({
-      id,
-      name: email || `Unknown Customer (${id})`,
-      ticketCount: count
-    }))
-    .sort((a, b) => b.ticketCount - a.ticketCount)
-    .slice(0, 5);
-}
-
 // Add new helper functions for ratings
 function calculateAverageRating(tickets: any[]): number {
   const ratedTickets = tickets.filter(t => t.rating != null);

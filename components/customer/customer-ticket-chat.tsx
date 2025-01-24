@@ -5,7 +5,7 @@ import { createClient } from "@/utils/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Paperclip, X, Download, FileIcon, Loader2, Star } from "lucide-react";
+import { Send, Paperclip, X, Download, FileIcon, Star } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Database } from "@/types/supabase";
@@ -42,24 +42,23 @@ type Ticket = Database["public"]["Tables"]["tickets"]["Row"] & {
   };
 };
 
-interface CustomerTicketChatProps {
+export interface CustomerTicketChatProps {
   ticket: Ticket;
-  initialMessages: Message[];
-  onTicketUpdate?: (updatedTicket: Ticket) => void;
+  onTicketUpdate?: (ticket: Ticket) => void;
 }
 
-export function CustomerTicketChat({ ticket: initialTicket, initialMessages, onTicketUpdate }: CustomerTicketChatProps) {
+export function CustomerTicketChat({ ticket: initialTicket, onTicketUpdate }: CustomerTicketChatProps) {
   const [ticket, setTicket] = useState<Ticket>(initialTicket);
   const [messages, setMessages] = useState<Message[]>([]);
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [isResolving, setIsResolving] = useState(false);
   const [showRatingDialog, setShowRatingDialog] = useState(false);
   const [rating, setRating] = useState(0);
   const [isHovering, setIsHovering] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const processedMessageIds = useRef(new Set<string>());
   const { toast } = useToast();
   const supabase = createClient();
 
@@ -140,129 +139,6 @@ export function CustomerTicketChat({ ticket: initialTicket, initialMessages, onT
     loadMessages();
   }, [ticket.id, supabase]);
 
-  // Send message
-  const sendMessage = async () => {
-    if (!message.trim() && selectedFiles.length === 0) return;
-
-    setIsSending(true);
-    try {
-      // Get current user
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      // First insert the message
-      const { data: messageData, error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          ticket_id: ticket.id,
-          user_id: user.id,
-          content: message.trim() || "Attached files", // Use default text if only files
-        })
-        .select('*, user:users(*)')
-        .single();
-
-      if (messageError) throw messageError;
-
-      // Then upload files and create attachment records
-      if (selectedFiles.length > 0) {
-        for (const file of selectedFiles) {
-          // Generate a unique file path
-          const fileExt = file.name.split('.').pop();
-          const filePath = `${ticket.id}/${messageData.id}/${crypto.randomUUID()}.${fileExt}`;
-
-          // Upload file to storage
-          const { error: uploadError } = await supabase.storage
-            .from('attachments')
-            .upload(filePath, file);
-
-          if (uploadError) throw uploadError;
-
-          // Create attachment record
-          const { error: attachmentError } = await supabase
-            .from('attachments')
-            .insert({
-              message_id: messageData.id,
-              filename: file.name,
-              storage_path: filePath,
-              content_type: file.type,
-              size: file.size
-            })
-            .select()
-            .single();
-
-          if (attachmentError) throw attachmentError;
-        }
-      }
-
-      // Clear the form
-      setMessage("");
-      setSelectedFiles([]);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast({
-        title: "Error",
-        description: "Failed to send message",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files) {
-      const newFiles = Array.from(files);
-      setSelectedFiles(prev => [...prev, ...newFiles]);
-    }
-    // Reset the input value so the same file can be selected again
-    event.target.value = '';
-  };
-
-  const removeFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const MessageContent = ({ message }: { message: Message }) => {
-    return (
-      <div className="space-y-2">
-        <div className="whitespace-pre-wrap break-all">
-          {message.content}
-        </div>
-        {message.attachments && message.attachments.length > 0 && (
-          <div className="space-y-2 mt-2 border-t pt-2">
-            {message.attachments.map((attachment) => (
-              <div
-                key={attachment.id}
-                className="flex items-center gap-2 bg-background/50 rounded p-2 text-sm"
-              >
-                <FileIcon className="h-4 w-4 shrink-0" />
-                <span className="truncate flex-1">
-                  {attachment.filename}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  asChild
-                >
-                  <a
-                    href={attachment.url}
-                    download={attachment.filename}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Download className="h-3 w-3" />
-                  </a>
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   // Subscribe to new messages
   useEffect(() => {
     const channel = supabase
@@ -277,6 +153,11 @@ export function CustomerTicketChat({ ticket: initialTicket, initialMessages, onT
         },
         async (payload) => {
           if (payload.eventType === 'INSERT') {
+            // Check if we've already processed this message
+            if (processedMessageIds.current.has(payload.new.id)) {
+              return;
+            }
+
             // Wait a bit for attachments to be created
             await new Promise(resolve => setTimeout(resolve, 1000));
 
@@ -328,7 +209,16 @@ export function CustomerTicketChat({ ticket: initialTicket, initialMessages, onT
                 attachments: attachmentsWithUrls
               };
 
-              setMessages(prev => [...prev, fullMessage]);
+              // Mark message as processed
+              processedMessageIds.current.add(fullMessage.id);
+
+              setMessages(prev => {
+                // Check if message already exists in the array
+                if (prev.some(m => m.id === fullMessage.id)) {
+                  return prev;
+                }
+                return [...prev, fullMessage];
+              });
               scrollToBottom();
             }
           }
@@ -345,6 +235,152 @@ export function CustomerTicketChat({ ticket: initialTicket, initialMessages, onT
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Send message
+  const sendMessage = async () => {
+    if (!message.trim() && selectedFiles.length === 0) return;
+
+    setIsSending(true);
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // First insert the message
+      const { data: messageData, error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          ticket_id: ticket.id,
+          user_id: user.id,
+          content: message.trim() || "Attached files", // Use default text if only files
+        })
+        .select('*, user:users(*)')
+        .single();
+
+      if (messageError) throw messageError;
+
+      let attachmentsWithUrls: MessageAttachment[] = [];
+
+      // Then upload files and create attachment records
+      if (selectedFiles.length > 0) {
+        for (const file of selectedFiles) {
+          // Generate a unique file path
+          const fileExt = file.name.split('.').pop();
+          const filePath = `${ticket.id}/${messageData.id}/${crypto.randomUUID()}.${fileExt}`;
+
+          // Upload file to storage
+          const { error: uploadError } = await supabase.storage
+            .from('attachments')
+            .upload(filePath, file);
+
+          if (uploadError) throw uploadError;
+
+          // Create attachment record
+          const { data: attachmentData, error: attachmentError } = await supabase
+            .from('attachments')
+            .insert({
+              message_id: messageData.id,
+              filename: file.name,
+              storage_path: filePath,
+              content_type: file.type,
+              size: file.size
+            })
+            .select()
+            .single();
+
+          if (attachmentError) throw attachmentError;
+
+          // Get the public URL for the attachment
+          const { data: { publicUrl } } = supabase.storage
+            .from('attachments')
+            .getPublicUrl(filePath);
+
+          attachmentsWithUrls.push({
+            ...attachmentData,
+            url: publicUrl
+          });
+        }
+      }
+
+      // Mark message as processed before adding it locally
+      processedMessageIds.current.add(messageData.id);
+
+      // Update local messages state immediately
+      const newMessage: Message = {
+        ...messageData,
+        attachments: attachmentsWithUrls
+      };
+      setMessages(prev => [...prev, newMessage]);
+      scrollToBottom();
+
+      // Clear the form
+      setMessage("");
+      setSelectedFiles([]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send message",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files) {
+      const newFiles = Array.from(files);
+      setSelectedFiles(prev => [...prev, ...newFiles]);
+    }
+    // Reset the input value so the same file can be selected again
+    event.target.value = '';
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const MessageContent = ({ message }: { message: Message }) => {
+    return (
+      <div className="space-y-2">
+        <div className="whitespace-pre-wrap break-words">
+          {message.content}
+        </div>
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="space-y-2 mt-2 border-t pt-2">
+            {message.attachments.map((attachment) => (
+              <div
+                key={attachment.id}
+                className="flex items-center gap-2 bg-background/50 rounded p-2 text-sm"
+              >
+                <FileIcon className="h-4 w-4 shrink-0" />
+                <span className="truncate flex-1">
+                  {attachment.filename}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  asChild
+                >
+                  <a
+                    href={attachment.url}
+                    download={attachment.filename}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Download className="h-3 w-3" />
+                  </a>
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const handleRatingSubmit = async () => {
     try {
@@ -426,14 +462,9 @@ export function CustomerTicketChat({ ticket: initialTicket, initialMessages, onT
               <Button
                 variant="default"
                 onClick={resolveTicket}
-                disabled={isResolving || ticket.status === 'resolved'}
+                disabled={ticket.status === 'resolved'}
               >
-                {isResolving ? (
-                  <>
-                    <span className="mr-2">Resolving...</span>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  </>
-                ) : ticket.status === 'resolved' ? (
+                {ticket.status === 'resolved' ? (
                   "Ticket Resolved"
                 ) : (
                   "Resolve Ticket"
@@ -443,31 +474,37 @@ export function CustomerTicketChat({ ticket: initialTicket, initialMessages, onT
           )}
         </div>
 
-        <ScrollArea className="flex-1 border rounded-lg p-4 min-h-0">
+        <ScrollArea className="border rounded-lg p-4" style={{ height: "500px" }}>
           <div className="flex flex-col space-y-4">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={cn(
-                  "flex w-full",
-                  msg.user.role === "customer" ? "justify-end" : "justify-start"
-                )}
-              >
+            {messages.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                No messages yet. Start the conversation by sending a message below.
+              </div>
+            ) : (
+              messages.map((msg) => (
                 <div
+                  key={msg.id}
                   className={cn(
-                    "max-w-[80%] rounded-lg p-3 overflow-hidden",
-                    msg.user.role === "customer"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted"
+                    "flex w-full",
+                    msg.user.role === "customer" ? "justify-end" : "justify-start"
                   )}
                 >
-                  <div className="text-xs opacity-70 mb-1 truncate">
-                    {msg.user.email} • {new Date(msg.created_at).toLocaleTimeString()}
+                  <div
+                    className={cn(
+                      "max-w-[80%] rounded-lg p-3 overflow-hidden",
+                      msg.user.role === "customer"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted"
+                    )}
+                  >
+                    <div className="text-xs opacity-70 mb-1 truncate">
+                      {msg.user.email} • {new Date(msg.created_at).toLocaleTimeString()}
+                    </div>
+                    <MessageContent message={msg} />
                   </div>
-                  <MessageContent message={msg} />
                 </div>
-              </div>
-            ))}
+              ))
+            )}
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
@@ -487,6 +524,14 @@ export function CustomerTicketChat({ ticket: initialTicket, initialMessages, onT
                   : "Waiting for an agent to be assigned..."}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (message.trim() || selectedFiles.length > 0) {
+                      sendMessage();
+                    }
+                  }
+                }}
                 className="min-h-[80px]"
               />
             </div>
