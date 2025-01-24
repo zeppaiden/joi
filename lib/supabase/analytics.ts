@@ -16,6 +16,7 @@ export async function getOrganizationAnalytics(organizationId: string): Promise<
         priority_level,
         created_at,
         updated_at,
+        rating,
         tags:ticket_tags(tag:tags(name))
       `)
       .eq('organization_id', organizationId)
@@ -33,7 +34,8 @@ export async function getOrganizationAnalytics(organizationId: string): Promise<
             id,
             status,
             created_at,
-            updated_at
+            updated_at,
+            rating
           )
         )
       `)
@@ -48,7 +50,8 @@ export async function getOrganizationAnalytics(organizationId: string): Promise<
         customer:users!created_by(
           email
         ),
-        messages(count)
+        messages(count),
+        rating
       `)
       .eq('organization_id', organizationId)
       .is('deleted_at', null);
@@ -93,6 +96,8 @@ export async function getOrganizationAnalytics(organizationId: string): Promise<
         urgent: ticketData?.filter(t => t.priority_level === 'urgent').length || 0
       },
       averageResolutionTime: calculateAverageResolutionTime(ticketData || []),
+      averageRating: calculateAverageRating(ticketData || []),
+      ratingDistribution: calculateRatingDistribution(ticketData || []),
       dailyTickets: calculateDailyTickets(ticketData || []),
       topTags: calculateTopTags(ticketData || [])
     };
@@ -100,21 +105,57 @@ export async function getOrganizationAnalytics(organizationId: string): Promise<
     console.log('Processed ticket metrics:', ticketMetrics);
 
     // Process agent metrics
-    const agentMetrics = (agentData || []).map(agent => ({
-      id: agent.user.id,
-      name: agent.user.email,
-      ticketsResolved: (agent.user.assigned_tickets || []).filter(t => t.status === 'resolved').length,
-      averageResponseTime: calculateAverageResponseTime(agent.user.assigned_tickets || []),
-      activeTickets: (agent.user.assigned_tickets || []).filter(t => t.status !== 'closed').length
-    }));
+    const agentMetrics = (agentData || []).map(agent => {
+      const tickets = agent.user.assigned_tickets || [];
+      const ratedTickets = tickets.filter(t => t.rating != null);
+      
+      return {
+        id: agent.user.id,
+        name: agent.user.email,
+        ticketsResolved: tickets.filter(t => t.status === 'resolved').length,
+        averageResponseTime: calculateAverageResponseTime(tickets),
+        activeTickets: tickets.filter(t => t.status !== 'closed').length,
+        averageRating: calculateAverageRating(ratedTickets),
+        totalRatings: ratedTickets.length,
+        ratingDistribution: calculateRatingDistribution(ratedTickets)
+      };
+    });
 
     console.log('Processed agent metrics count:', agentMetrics.length);
 
     // Process customer metrics
+    const customerTickets = new Map<string, {
+      email: string | null;
+      tickets: any[];
+    }>();
+
+    customerData?.forEach(ticket => {
+      if (!customerTickets.has(ticket.created_by)) {
+        customerTickets.set(ticket.created_by, {
+          email: ticket.customer?.email || null,
+          tickets: []
+        });
+      }
+      customerTickets.get(ticket.created_by)?.tickets.push(ticket);
+    });
+
     const customerMetrics = {
-      totalCustomers: new Set(customerData?.map(t => t.created_by)).size,
+      totalCustomers: customerTickets.size,
       averageMessagesPerTicket: calculateAverageMessagesPerTicket(customerData || []),
-      mostActiveCustomers: calculateMostActiveCustomers(customerData || [])
+      mostActiveCustomers: Array.from(customerTickets.entries())
+        .map(([id, { email, tickets }]) => {
+          const ratedTickets = tickets.filter(t => t.rating != null);
+          return {
+            id,
+            name: email || `Unknown Customer (${id})`,
+            ticketCount: tickets.length,
+            averageRating: calculateAverageRating(ratedTickets),
+            totalRatings: ratedTickets.length,
+            ratingDistribution: calculateRatingDistribution(ratedTickets)
+          };
+        })
+        .sort((a, b) => b.ticketCount - a.ticketCount)
+        .slice(0, 5)
     };
 
     console.log('Processed customer metrics:', customerMetrics);
@@ -204,4 +245,34 @@ function calculateMostActiveCustomers(tickets: any[]): Array<{ id: string; name:
     }))
     .sort((a, b) => b.ticketCount - a.ticketCount)
     .slice(0, 5);
+}
+
+// Add new helper functions for ratings
+function calculateAverageRating(tickets: any[]): number {
+  const ratedTickets = tickets.filter(t => t.rating != null);
+  if (ratedTickets.length === 0) return 0;
+  
+  const totalRating = ratedTickets.reduce((sum, ticket) => sum + ticket.rating, 0);
+  return totalRating / ratedTickets.length;
+}
+
+function calculateRatingDistribution(tickets: any[]): { 1: number; 2: number; 3: number; 4: number; 5: number } {
+  const distribution: { 1: number; 2: number; 3: number; 4: number; 5: number } = {
+    1: 0,
+    2: 0,
+    3: 0,
+    4: 0,
+    5: 0
+  };
+
+  tickets
+    .filter(t => t.rating != null)
+    .forEach(ticket => {
+      const rating = ticket.rating as 1 | 2 | 3 | 4 | 5;
+      if (rating >= 1 && rating <= 5) {
+        distribution[rating]++;
+      }
+    });
+
+  return distribution;
 } 

@@ -396,6 +396,7 @@ export type Database = {
           id: string
           organization_id: string | null
           priority_level: string | null
+          rating: number | null
           status: string | null
           title: string
           updated_at: string
@@ -410,6 +411,7 @@ export type Database = {
           id: string
           organization_id?: string | null
           priority_level?: string | null
+          rating?: number | null
           status?: string | null
           title: string
           updated_at?: string
@@ -424,6 +426,7 @@ export type Database = {
           id?: string
           organization_id?: string | null
           priority_level?: string | null
+          rating?: number | null
           status?: string | null
           title?: string
           updated_at?: string

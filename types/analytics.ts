@@ -13,6 +13,14 @@ export interface TicketMetrics {
     urgent: number;
   };
   averageResolutionTime: number; // in hours
+  averageRating: number;
+  ratingDistribution: {
+    1: number;
+    2: number;
+    3: number;
+    4: number;
+    5: number;
+  };
   dailyTickets: Array<{
     date: string;
     count: number;
@@ -29,6 +37,15 @@ export interface AgentMetrics {
   ticketsResolved: number;
   averageResponseTime: number; // in hours
   activeTickets: number;
+  averageRating: number;
+  totalRatings: number;
+  ratingDistribution: {
+    1: number;
+    2: number;
+    3: number;
+    4: number;
+    5: number;
+  };
 }
 
 export interface CustomerMetrics {
@@ -38,6 +55,15 @@ export interface CustomerMetrics {
     id: string;
     name: string;
     ticketCount: number;
+    averageRating: number;
+    totalRatings: number;
+    ratingDistribution: {
+      1: number;
+      2: number;
+      3: number;
+      4: number;
+      5: number;
+    };
   }>;
 }
 

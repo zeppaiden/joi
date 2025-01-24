@@ -153,20 +153,22 @@ export function Analytics() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
+                <CardTitle className="text-sm font-medium">Average Rating</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{data.customerMetrics.totalCustomers}</div>
+                <div className="text-2xl font-bold">
+                  {data.ticketMetrics.averageRating.toFixed(1)} ★
+                </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Avg Messages/Ticket</CardTitle>
+                <CardTitle className="text-sm font-medium">Total Ratings</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {data.customerMetrics.averageMessagesPerTicket.toFixed(1)}
+                  {Object.values(data.ticketMetrics.ratingDistribution).reduce((a, b) => a + b, 0)}
                 </div>
               </CardContent>
             </Card>
@@ -499,22 +501,42 @@ export function Analytics() {
             {data.agentMetrics.map((agent) => (
               <Card key={agent.id}>
                 <CardHeader>
-                  <CardTitle className="text-lg">{agent.name}</CardTitle>
+                  <CardTitle>{agent.name}</CardTitle>
+                  <CardDescription>
+                    {agent.activeTickets} Active • {agent.ticketsResolved} Resolved
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Resolved Tickets</p>
-                      <p className="text-2xl font-bold">{agent.ticketsResolved}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Average Rating</span>
+                    <span className="font-medium">
+                      {agent.averageRating.toFixed(1)} ★ ({agent.totalRatings} ratings)
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium">Rating Distribution</div>
+                    <div className="grid grid-cols-5 gap-1">
+                      {[5, 4, 3, 2, 1].map((rating) => (
+                        <div key={rating} className="space-y-1">
+                          <div className="h-20 relative">
+                            <div 
+                              className="absolute bottom-0 w-full bg-primary/20 rounded-sm"
+                              style={{ 
+                                height: `${(agent.ratingDistribution[rating as 1 | 2 | 3 | 4 | 5] / agent.totalRatings) * 100}%`,
+                                minHeight: '1px'
+                              }}
+                            />
+                          </div>
+                          <div className="text-center text-xs">{rating}★</div>
+                        </div>
+                      ))}
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Active Tickets</p>
-                      <p className="text-2xl font-bold">{agent.activeTickets}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Avg Response Time</p>
-                      <p className="text-2xl font-bold">{agent.averageResponseTime.toFixed(1)}h</p>
-                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Response Time</span>
+                    <span className="font-medium">{agent.averageResponseTime.toFixed(1)}h</span>
                   </div>
                 </CardContent>
               </Card>
@@ -527,19 +549,31 @@ export function Analytics() {
           <Card>
             <CardHeader>
               <CardTitle>Most Active Customers</CardTitle>
+              <CardDescription>Customer activity and satisfaction metrics</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {data.customerMetrics.mostActiveCustomers.map((customer, index) => (
                   <div key={customer.id}>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium">{customer.name}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {customer.ticketCount} tickets
-                      </span>
+                      <div>
+                        <div className="font-medium">{customer.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {customer.ticketCount} tickets
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-medium">
+                          Average Rating: {customer.averageRating > 0 ? `${customer.averageRating.toFixed(1)} ★` : 'No ratings'}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          from {customer.totalRatings} {customer.totalRatings === 1 ? 'rating' : 'ratings'}
+                        </div>
+                      </div>
                     </div>
+
                     {index < data.customerMetrics.mostActiveCustomers.length - 1 && (
-                      <Separator className="my-2" />
+                      <Separator className="my-4" />
                     )}
                   </div>
                 ))}
