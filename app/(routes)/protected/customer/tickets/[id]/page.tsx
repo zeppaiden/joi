@@ -5,18 +5,19 @@ import { Badge } from "@/components/ui/badge";
 import { CustomerTicketChat } from "@/components/customer/customer-ticket-chat";
 import { Metadata } from "next";
 
-type Props = {
+interface PageProps {
   params: {
     id: string;
   };
-};
+  searchParams?: { [key: string]: string | string[] | undefined };
+}
 
 export const metadata: Metadata = {
   title: "Ticket Details",
   description: "View and manage ticket details",
 };
 
-export default async function CustomerTicketPage({ params }: Props) {
+export default async function CustomerTicketPage({ params }: PageProps) {
   const { id } = params;
   const supabase = await createClient();
 
