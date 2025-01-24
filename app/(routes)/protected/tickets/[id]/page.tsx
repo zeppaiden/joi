@@ -378,6 +378,48 @@ export default function TicketDetailsPage() {
     scrollToBottom();
   }, [messages]);
 
+  // Subscribe to ticket tags
+  useEffect(() => {
+    if (!id) return;
+
+    const channel = supabase
+      .channel(`ticket_tags:${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ticket_tags',
+          filter: `ticket_id=eq.${id}`,
+        },
+        async (payload) => {
+          if (payload.eventType === 'INSERT') {
+            // Fetch the complete tag details
+            const { data: tag } = await supabase
+              .from('tags')
+              .select('*')
+              .eq('id', payload.new.tag_id)
+              .single();
+
+            if (tag) {
+              setTicketTags(prev => {
+                // Check if tag already exists to prevent duplicates
+                if (prev.some(t => t.id === tag.id)) return prev;
+                return [...prev, tag];
+              });
+            }
+          } else if (payload.eventType === 'DELETE') {
+            setTicketTags(prev => prev.filter(t => t.id !== payload.old.tag_id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, supabase]);
+
   // Send message
   const sendMessage = async () => {
     if (!message.trim() || !ticket) return;
@@ -497,21 +539,12 @@ export default function TicketDetailsPage() {
 
       if (error) throw error;
 
-      // Get the tag details
-      const { data: tag } = await supabase
-        .from('tags')
-        .select('*')
-        .eq('id', tagId)
-        .single();
-
-      if (tag) {
-        setTicketTags(prev => [...prev, tag]);
-        setIsTagDialogOpen(false);
-        toast({
-          title: "Success",
-          description: "Tag added to ticket",
-        });
-      }
+      // Remove the manual state update since the subscription will handle it
+      setIsTagDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Tag added to ticket",
+      });
     } catch (error) {
       console.error('Error adding tag:', error);
       toast({
