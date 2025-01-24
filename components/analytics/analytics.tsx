@@ -8,7 +8,7 @@ import { getOrganizationAnalytics } from "@/lib/supabase/analytics";
 import { OrganizationAnalytics } from "@/types/analytics";
 import { useOrganization } from "@/hooks/use-organization";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { Line, LineChart, XAxis, YAxis, Bar, BarChart, Pie, PieChart, Cell, CartesianGrid } from "recharts";
+import { Line, LineChart, XAxis, YAxis, Bar, BarChart, Pie, PieChart, CartesianGrid } from "recharts";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { Label } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
