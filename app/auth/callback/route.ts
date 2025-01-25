@@ -7,44 +7,44 @@ export async function GET(request: Request) {
   // https://supabase.com/docs/guides/auth/server-side/nextjs
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
-  const origin = requestUrl.origin;
-  const redirectTo = requestUrl.searchParams.get("redirect_to")?.toString() ?? "/";
+
+  // These can be used to customize the redirect behavior
+  // const origin = requestUrl.origin;  // The base URL of the application
+  // const redirectTo = requestUrl.searchParams.get("redirect_to")?.toString() ?? "/";  // Custom redirect path from auth provider
 
   if (code) {
     const supabase = await createClient();
+
+    // Exchange the auth code for the user's session
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-    if (!error) {
-      // Get the user after exchanging the code
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (user) {
-        // Check if user exists in users table and has a role
-        const { data: userData } = await supabase
-          .from('users')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-
-        if (!userData || !userData.role) {
-          // If no user record or no role, redirect to registration
-          return NextResponse.redirect(`${origin}/register`);
-        }
-
-        // If user has a role, redirect to appropriate dashboard
-        switch (userData.role) {
-          case 'admin':
-          case 'agent':
-            return NextResponse.redirect(`${origin}/protected/inbox`);
-          case 'customer':
-            return NextResponse.redirect(`${origin}/protected/customer-portal`);
-          default:
-            return NextResponse.redirect(`${origin}/register`);
-        }
-      }
+    if (error) {
+      console.error('Auth callback error:', error);
+      return NextResponse.redirect(new URL('/sign-in', request.url));
     }
+
+    // Get the user to check if they need to register
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error('Failed to get user:', userError);
+      return NextResponse.redirect(new URL('/sign-in', request.url));
+    }
+
+    // Check if user exists in users table
+    const { data: existingUser, error: userCheckError } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (userCheckError || !existingUser || !existingUser.role) {
+      // User needs to complete registration
+      return NextResponse.redirect(new URL('/protected/register', request.url));
+    }
+
+    // User exists and has a role, redirect to their dashboard
+    return NextResponse.redirect(new URL('/protected/dashboard', request.url));
   }
 
-  // If there's an error or no code, redirect to error page
-  return NextResponse.redirect(`${origin}/auth/auth-code-error`);
+  // No code, redirect to sign in
+  return NextResponse.redirect(new URL('/sign-in', request.url));
 }
