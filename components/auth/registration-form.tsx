@@ -35,16 +35,18 @@ export function RegistrationForm() {
     resolver: zodResolver(registrationSchema),
     defaultValues: {
       role: undefined,
-      organizationName: "",
-      inviteCode: "",
+      organizationName: undefined,
+      inviteCode: undefined,
     },
   });
 
   const selectedRole = form.watch("role");
 
   async function onSubmit(data: RegistrationPayload) {
+    console.log("onSubmit function called with data:", data);
     try {
       setIsLoading(true);
+      console.log("Making registration request...");
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,6 +54,11 @@ export function RegistrationForm() {
       });
 
       const result = await response.json();
+      console.log("Registration response:", {
+        ok: response.ok,
+        status: response.status,
+        result
+      });
 
       if (!response.ok) {
         throw new Error(result.error || "Something went wrong");
@@ -69,6 +76,7 @@ export function RegistrationForm() {
         router.push(result.redirectTo);
       }
     } catch (error) {
+      console.error("Registration error:", error);
       toast({
         variant: "destructive",
         title: "Registration failed",
@@ -79,11 +87,43 @@ export function RegistrationForm() {
     }
   }
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    console.log("Form submission started");
+    e.preventDefault();
+    
+    const values = form.getValues();
+    
+    // Convert empty strings to undefined
+    const cleanedValues = {
+      ...values,
+      organizationName: values.organizationName?.trim() || undefined,
+      inviteCode: values.inviteCode?.trim() || undefined,
+    };
+    
+    console.log("Submitting with values:", cleanedValues);
+    
+    // Validate the data manually
+    try {
+      const validatedData = registrationSchema.parse(cleanedValues);
+      console.log("Data validated successfully:", validatedData);
+      await onSubmit(validatedData);
+    } catch (error) {
+      console.error("Validation error:", error);
+      if (error instanceof Error) {
+        toast({
+          variant: "destructive",
+          title: "Validation Error",
+          description: error.message,
+        });
+      }
+    }
+  };
+
   return (
     <Card className="w-full">
       <CardContent className="pt-6">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <FormField
               control={form.control}
               name="role"
@@ -92,8 +132,11 @@ export function RegistrationForm() {
                   <FormLabel>Role</FormLabel>
                   <Select
                     disabled={isLoading}
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
+                    onValueChange={(value) => {
+                      console.log("Role selected:", value);
+                      field.onChange(value);
+                    }}
+                    value={field.value}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -115,14 +158,16 @@ export function RegistrationForm() {
               <FormField
                 control={form.control}
                 name="organizationName"
-                render={({ field }) => (
+                render={({ field: { value, onChange, ...field } }) => (
                   <FormItem>
                     <FormLabel>Organization Name</FormLabel>
                     <FormControl>
                       <Input
+                        {...field}
+                        value={value ?? ""}
+                        onChange={(e) => onChange(e.target.value || undefined)}
                         disabled={isLoading}
                         placeholder="Enter your organization name"
-                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -135,14 +180,16 @@ export function RegistrationForm() {
               <FormField
                 control={form.control}
                 name="inviteCode"
-                render={({ field }) => (
+                render={({ field: { value, onChange, ...field } }) => (
                   <FormItem>
                     <FormLabel>Invite Code (Optional)</FormLabel>
                     <FormControl>
                       <Input
+                        {...field}
+                        value={value ?? ""}
+                        onChange={(e) => onChange(e.target.value || undefined)}
                         disabled={isLoading}
                         placeholder="Enter your invite code"
-                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -151,7 +198,11 @@ export function RegistrationForm() {
               />
             )}
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={isLoading}
+            >
               {isLoading ? "Registering..." : "Complete Registration"}
             </Button>
           </form>

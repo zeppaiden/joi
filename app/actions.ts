@@ -132,3 +132,40 @@ export const signOutAction = async () => {
   await supabase.auth.signOut();
   return redirect("/sign-in");
 };
+
+export const signUpWithDiscord = async () => {
+  const supabase = await createClient();
+  const origin = (await headers()).get("origin");
+  const redirectTo = `${origin}/auth/callback`;
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'discord',
+    options: { redirectTo },
+  })
+  if (error) {
+    return encodedRedirect("error", "/sign-up", error.message);
+  }
+
+  if (data.url) {
+    redirect(data.url)
+  }
+}
+
+export const signInWithDiscord = async () => {
+  const supabase = await createClient();
+  const origin = (await headers()).get("origin");
+  const redirectTo = `${origin}/auth/callback`;
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'discord',
+    options: { redirectTo },
+  })
+
+  if (error) {
+    return encodedRedirect("error", "/sign-in", error.message);
+  }
+
+  if (data.url) {
+    redirect(data.url)
+  }
+}

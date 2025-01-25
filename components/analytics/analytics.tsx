@@ -9,14 +9,17 @@ import { OrganizationAnalytics } from "@/types/analytics";
 import { useOrganization } from "@/hooks/use-organization";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { Line, LineChart, XAxis, YAxis, Bar, BarChart, Pie, PieChart, CartesianGrid } from "recharts";
-import { TrendingDown, TrendingUp } from "lucide-react";
+import { TrendingDown, TrendingUp, Building2 } from "lucide-react";
 import { Label } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 
 export function Analytics() {
   const [data, setData] = useState<OrganizationAnalytics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { organization, isLoading: orgLoading, error: orgError } = useOrganization();
+  const router = useRouter();
 
   useEffect(() => {
     async function loadAnalytics() {
@@ -38,6 +41,7 @@ export function Analytics() {
 
       if (!organization?.id) {
         console.log('No organization ID available');
+        setIsLoading(false);
         return;
       }
 
@@ -102,16 +106,47 @@ export function Analytics() {
     );
   }
 
-  if (orgError) {
-    return <div>Error loading organization: {orgError.message}</div>;
+  if (!organization) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] p-6">
+        <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
+        <h2 className="text-2xl font-semibold mb-2">No Organization Found</h2>
+        <p className="text-muted-foreground text-center mb-6 max-w-md">
+          You need to be part of an organization to view analytics. Create a new organization or ask your administrator for an invite.
+        </p>
+        <Button onClick={() => router.push('/protected/organization')}>
+          Manage Organizations
+        </Button>
+      </div>
+    );
   }
 
-  if (!organization) {
-    return <div>No organization found. Please contact your administrator.</div>;
+  if (orgError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] p-6">
+        <h2 className="text-2xl font-semibold text-destructive mb-2">Error Loading Organization</h2>
+        <p className="text-muted-foreground text-center mb-6">
+          {orgError.message}
+        </p>
+        <Button variant="outline" onClick={() => router.push('/protected/organization')}>
+          Go to Organizations
+        </Button>
+      </div>
+    );
   }
 
   if (!data) {
-    return <div>Error loading analytics data. Please try again later.</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] p-6">
+        <h2 className="text-2xl font-semibold mb-2">Error Loading Analytics</h2>
+        <p className="text-muted-foreground text-center mb-6">
+          Unable to load analytics data. Please try again later.
+        </p>
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      </div>
+    );
   }
 
   const totalTickets = Object.values(data.ticketMetrics.byStatus).reduce((a, b) => a + b, 0);

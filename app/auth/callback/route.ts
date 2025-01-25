@@ -8,17 +8,43 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const origin = requestUrl.origin;
-  const redirectTo = requestUrl.searchParams.get("redirect_to")?.toString();
+  const redirectTo = requestUrl.searchParams.get("redirect_to")?.toString() ?? "/";
 
   if (code) {
     const supabase = await createClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (!error) {
+      // Get the user after exchanging the code
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        // Check if user exists in users table and has a role
+        const { data: userData } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        if (!userData || !userData.role) {
+          // If no user record or no role, redirect to registration
+          return NextResponse.redirect(`${origin}/register`);
+        }
+
+        // If user has a role, redirect to appropriate dashboard
+        switch (userData.role) {
+          case 'admin':
+          case 'agent':
+            return NextResponse.redirect(`${origin}/protected/inbox`);
+          case 'customer':
+            return NextResponse.redirect(`${origin}/protected/customer-portal`);
+          default:
+            return NextResponse.redirect(`${origin}/register`);
+        }
+      }
+    }
   }
 
-  if (redirectTo) {
-    return NextResponse.redirect(`${origin}${redirectTo}`);
-  }
-
-  // URL to redirect to after sign up process completes
-  return NextResponse.redirect(`${origin}/protected`);
+  // If there's an error or no code, redirect to error page
+  return NextResponse.redirect(`${origin}/auth/auth-code-error`);
 }
