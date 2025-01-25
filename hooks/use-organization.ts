@@ -21,8 +21,15 @@ export function useOrganization() {
         
         // Get current user
         const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-          throw new Error('User not found');
+        if (userError) {
+          console.error('User fetch error:', userError);
+          throw new Error('Failed to get current user');
+        }
+        
+        if (!user) {
+          console.log('No user found');
+          setOrganization(null);
+          return;
         }
 
         // First try to find organization where user is admin
@@ -30,9 +37,16 @@ export function useOrganization() {
           .from('organizations')
           .select('*')
           .eq('admin_id', user.id)
-          .single();
+          .maybeSingle();
+
+        // If there's a 406 error, it means the response format wasn't acceptable
+        // This is likely due to the response not matching the expected schema
+        if (adminError && adminError.code !== '406') {
+          console.error('Admin org fetch error:', adminError);
+        }
 
         if (!adminError && adminOrg) {
+          console.log('Found admin organization:', adminOrg);
           setOrganization(adminOrg);
           return;
         }
@@ -42,14 +56,24 @@ export function useOrganization() {
           .from('organization_members')
           .select('organization:organizations(*)')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
-        if (memberError || !memberOrg) {
-          throw new Error('No organization found');
+        // Similarly handle 406 errors for member org fetch
+        if (memberError && memberError.code !== '406') {
+          console.error('Member org fetch error:', memberError);
         }
 
-        setOrganization(memberOrg.organization);
+        if (!memberError && memberOrg?.organization) {
+          console.log('Found member organization:', memberOrg.organization);
+          setOrganization(memberOrg.organization);
+          return;
+        }
+
+        // If we get here, no organization was found
+        console.log('No organization found for user');
+        setOrganization(null);
       } catch (err) {
+        console.error('Organization load error:', err);
         setError(err instanceof Error ? err : new Error('Failed to load organization'));
       } finally {
         setIsLoading(false);

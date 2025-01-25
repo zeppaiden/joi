@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import { RoleGate } from "@/components/auth/role-gate";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, FileText, Download, X } from "lucide-react";
+import { Plus, Search, FileText, Download, X, Building2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { AddDocumentModal } from "@/components/knowledge-base/add-document-modal";
 import { createClient } from "@/utils/supabase/client";
 import { useOrganization } from "@/hooks/use-organization";
 import { Badge } from "@/components/ui/badge";
+import { useRouter } from "next/navigation";
 import {
   Select,
   SelectContent,
@@ -38,11 +39,15 @@ export default function KnowledgeBasePage() {
   const [selectedCategory, setSelectedCategory] = useState<DocumentCategory | "all">("all");
   const [isLoading, setIsLoading] = useState(true);
   const { organization } = useOrganization();
+  const router = useRouter();
   const supabase = createClient();
 
   // Fetch documents on load and subscribe to changes
   useEffect(() => {
-    if (!organization) return;
+    if (!organization) {
+      setIsLoading(false);
+      return;
+    }
 
     async function fetchDocuments() {
       try {
@@ -167,117 +172,134 @@ export default function KnowledgeBasePage() {
               Manage and organize your organization's documentation and resources
             </p>
           </div>
-          <Button onClick={() => setIsAddModalOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Document
-          </Button>
-        </div>
-
-        {/* Filters */}
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-xl">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search by title or description..."
-              className="pl-10"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <Select
-            value={selectedCategory}
-            onValueChange={(value) => setSelectedCategory(value as DocumentCategory | "all")}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {CATEGORIES.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category.replace('-', ' ')}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {(searchQuery || selectedCategory !== "all") && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              className="h-10"
-            >
-              <X className="w-4 h-4 mr-2" />
-              Clear Filters
+          {organization && (
+            <Button onClick={() => setIsAddModalOpen(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Document
             </Button>
           )}
         </div>
 
-        {/* Documents Table */}
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead>Added</TableHead>
-                <TableHead className="w-[100px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
-                    Loading documents...
-                  </TableCell>
-                </TableRow>
-              ) : filteredDocuments.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
-                    {documents.length === 0 
-                      ? 'No documents added yet. Click "Add Document" to get started.'
-                      : 'No documents match your search criteria.'}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredDocuments.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center space-x-2">
-                        <FileText className="w-4 h-4 text-muted-foreground" />
-                        <span>{doc.title}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getCategoryBadgeVariant(doc.category)}>
-                        {doc.category.replace('-', ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="max-w-md truncate">
-                      {doc.description}
-                    </TableCell>
-                    <TableCell>{formatFileSize(doc.file_size)}</TableCell>
-                    <TableCell>
-                      {new Date(doc.created_at!).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDownload(doc)}
-                      >
-                        <Download className="w-4 h-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+        {!organization ? (
+          <div className="flex flex-col items-center justify-center min-h-[400px]">
+            <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
+            <h2 className="text-2xl font-semibold mb-2">No Organization Found</h2>
+            <p className="text-muted-foreground text-center mb-6 max-w-md">
+              You need to be part of an organization to access the knowledge base. Create a new organization or ask your administrator for an invite.
+            </p>
+            <Button onClick={() => router.push('/protected/organization')}>
+              Manage Organizations
+            </Button>
+          </div>
+        ) : (
+          <>
+            {/* Filters */}
+            <div className="flex items-center gap-4">
+              <div className="relative flex-1 max-w-xl">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search by title or description..."
+                  className="pl-10"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+              <Select
+                value={selectedCategory}
+                onValueChange={(value) => setSelectedCategory(value as DocumentCategory | "all")}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {CATEGORIES.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {category.replace('-', ' ')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(searchQuery || selectedCategory !== "all") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="h-10"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Clear Filters
+                </Button>
               )}
-            </TableBody>
-          </Table>
-        </div>
+            </div>
+
+            {/* Documents Table */}
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead>Size</TableHead>
+                    <TableHead>Added</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8">
+                        Loading documents...
+                      </TableCell>
+                    </TableRow>
+                  ) : filteredDocuments.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8">
+                        {documents.length === 0 
+                          ? 'No documents added yet. Click "Add Document" to get started.'
+                          : 'No documents match your search criteria.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredDocuments.map((doc) => (
+                      <TableRow key={doc.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center space-x-2">
+                            <FileText className="w-4 h-4 text-muted-foreground" />
+                            <span>{doc.title}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getCategoryBadgeVariant(doc.category)}>
+                            {doc.category.replace('-', ' ')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-md truncate">
+                          {doc.description}
+                        </TableCell>
+                        <TableCell>{formatFileSize(doc.file_size)}</TableCell>
+                        <TableCell>
+                          {new Date(doc.created_at!).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDownload(doc)}
+                          >
+                            <Download className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
 
         <AddDocumentModal 
           isOpen={isAddModalOpen}
