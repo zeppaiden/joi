@@ -1,6 +1,6 @@
 "use client"
 
-import { useTransition } from "react"
+import { useTransition, useEffect, useState, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { useDebounce } from "use-debounce"
@@ -9,12 +9,15 @@ export function CustomerSearch() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [_isPending, startTransition] = useTransition()
+  const [searchTerm, setSearchTerm] = useState(searchParams.get("search") ?? "")
   
-  const [handleSearch] = useDebounce((term: string) => {
+  const [debouncedSearchTerm] = useDebounce(searchTerm, 300)
+  
+  useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
     
-    if (term) {
-      params.set("search", term)
+    if (debouncedSearchTerm) {
+      params.set("search", debouncedSearchTerm)
     } else {
       params.delete("search")
     }
@@ -25,14 +28,14 @@ export function CustomerSearch() {
     startTransition(() => {
       router.push(`?${params.toString()}`)
     })
-  }, 300)
+  }, [debouncedSearchTerm, router, searchParams])
   
   return (
     <div className="w-full max-w-sm">
       <Input
         placeholder="Search customers..."
-        onChange={(e) => handleSearch(e.target.value)}
-        defaultValue={searchParams.get("search") ?? ""}
+        onChange={(e) => setSearchTerm(e.target.value)}
+        value={searchTerm}
         className="h-8 w-[150px] lg:w-[250px]"
       />
     </div>

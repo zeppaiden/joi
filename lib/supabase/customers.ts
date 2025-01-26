@@ -61,7 +61,12 @@ export async function getCustomers(params: Partial<CustomerTableParams>): Promis
     // Get customers who have tickets in the user's organization
     let query = supabase
       .from("users")
-      .select("*, tickets!inner(*)", { count: "exact" })
+      .select(`
+        *,
+        tickets!tickets_customer_id_fkey (
+          id
+        )
+      `, { count: "exact" })
       .eq("role", "customer")
       .eq("tickets.organization_id", orgMember.organization_id)
       .is("deleted_at", null)
