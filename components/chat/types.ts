@@ -4,10 +4,3 @@ export interface Message {
   content: string;
   timestamp: Date;
 }
-
-export interface QuickResponse {
-  id: string;
-  category: string;
-  title: string;
-  content: string;
-}

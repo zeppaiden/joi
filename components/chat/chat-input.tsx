@@ -1,34 +1,23 @@
 "use client";
 
-import { List, Send } from "lucide-react";
+import { Send } from "lucide-react";
 
 interface ChatInputProps {
   inputMessage: string;
   isLoading: boolean;
-  showQuickResponses: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onToggleQuickResponses: () => void;
 }
 
 export function ChatInput({
   inputMessage,
   isLoading,
-  showQuickResponses,
   onSubmit,
   onInputChange,
-  onToggleQuickResponses,
 }: ChatInputProps) {
   return (
     <form onSubmit={onSubmit} className="p-4 border-t">
       <div className="flex space-x-2">
-        <button
-          type="button"
-          onClick={onToggleQuickResponses}
-          className={`p-2 rounded-lg transition-colors ${showQuickResponses ? "bg-secondary" : "hover:bg-muted"}`}
-        >
-          <List className="w-5 h-5" />
-        </button>
         <input
           type="text"
           value={inputMessage}
