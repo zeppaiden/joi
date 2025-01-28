@@ -1,116 +1,112 @@
 "use client";
 
-import React, { useCallback } from "react";
-import { MessageSquare, X, Bot } from "lucide-react";
-import { useDebouncedCallback } from "use-debounce";
-import { Message } from "./types";
-import { MessageBubble } from "./message-bubble";
+import { useState } from "react";
+import { Message } from "@/types/chat";
+import { Card } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatInput } from "./chat-input";
+import { MessageBubble } from "./message-bubble";
+import { useToast } from "@/hooks/use-toast";
+import { MessageSquare, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function ChatWidget() {
-  const [isOpen, setIsOpen] = React.useState(false);
-  const [messages, setMessages] = React.useState<Message[]>([
-    {
-      id: "1",
-      type: "bot",
-      content: "Hello! How can I help you today?",
-      timestamp: new Date(),
-    },
-  ]);
-  const [inputMessage, setInputMessage] = React.useState("");
-  const [isLoading, setIsLoading] = React.useState(false);
-  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
-  const debouncedScroll = useDebouncedCallback(() => {
-    messagesEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
-  }, 100);
+  const handleSendMessage = async (content: string) => {
+    try {
+      setIsLoading(true);
 
-  const memoizedDebouncedScroll = useCallback(debouncedScroll, [
-    debouncedScroll,
-  ]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputMessage.trim()) return;
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      type: "user",
-      content: inputMessage.trim(),
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInputMessage("");
-    setIsLoading(true);
-
-    setTimeout(() => {
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: "bot",
-        content:
-          "Thank you for your message. I'm here to help! This is a simulated response.",
-        timestamp: new Date(),
+      // Add user message to chat
+      const userMessage: Message = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content,
+        createdAt: new Date(),
       };
-      setMessages((prev) => [...prev, botMessage]);
-      setIsLoading(false);
-    }, 1500);
-  };
+      setMessages(prev => [...prev, userMessage]);
 
-  React.useEffect(() => {
-    memoizedDebouncedScroll();
-  }, [messages, memoizedDebouncedScroll]);
+      // Send to API
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: content,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
+      const data = await response.json();
+      
+      // Add assistant message to chat
+      setMessages(prev => [...prev, data.message]);
+    } catch (error) {
+      console.error('Error sending message:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
       {isOpen ? (
-        <div className="bg-background rounded-lg shadow-xl w-96 flex flex-col border transition-all duration-300 ease-in-out">
-          <div className="p-4 border-b flex justify-between items-center bg-primary rounded-t-lg">
-            <div className="flex items-center space-x-2">
-              <Bot className="w-6 h-6 text-primary-foreground" />
-              <span className="text-primary-foreground font-medium">
-                AI Assistant
-              </span>
-            </div>
-            <button
+        <Card className="flex flex-col w-[400px] h-[600px] shadow-lg">
+          <div className="flex items-center justify-between p-4 border-b bg-primary rounded-t-lg">
+            <span className="text-primary-foreground font-medium">AI Assistant</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-primary-foreground hover:text-primary-foreground/90"
               onClick={() => setIsOpen(false)}
-              className="text-primary-foreground hover:text-primary-foreground/90 transition-colors"
             >
-              <X className="w-5 h-5" />
-            </button>
+              <X className="h-5 w-5" />
+            </Button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-96">
-            {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
-            ))}
-            {isLoading && (
-              <div className="flex items-center space-x-2 text-muted-foreground">
-                <Bot className="w-8 h-8 p-1.5 bg-muted rounded-full" />
-                <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" />
-                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce delay-100" />
-                  <div className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce delay-200" />
+          
+          <ScrollArea className="flex-1 p-4">
+            <div className="space-y-4">
+              {messages.length === 0 && (
+                <div className="text-center text-muted-foreground p-4">
+                  How can I help you today?
                 </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
+              )}
+              {messages.map((message) => (
+                <MessageBubble
+                  key={message.id}
+                  message={message}
+                />
+              ))}
+            </div>
+          </ScrollArea>
+          
+          <div className="p-4 border-t">
+            <ChatInput
+              onSend={handleSendMessage}
+              isLoading={isLoading}
+            />
           </div>
-          <ChatInput
-            inputMessage={inputMessage}
-            isLoading={isLoading}
-            onSubmit={handleSubmit}
-            onInputChange={(e) => setInputMessage(e.target.value)}
-          />
-        </div>
+        </Card>
       ) : (
-        <button
+        <Button
           onClick={() => setIsOpen(true)}
-          className="bg-primary text-primary-foreground p-3 rounded-full shadow-lg hover:bg-primary/90 transition-colors"
+          size="icon"
+          className="h-12 w-12 rounded-full shadow-lg"
         >
-          <MessageSquare className="w-6 h-6" />
-        </button>
+          <MessageSquare className="h-6 w-6" />
+        </Button>
       )}
     </div>
   );
