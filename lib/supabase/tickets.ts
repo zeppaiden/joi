@@ -2,6 +2,7 @@ import { createClient } from "@/utils/supabase/server";
 import { TicketStats, TicketWithComputed, TicketFilters } from "@/types/tickets";
 import { TicketFormData, TicketStatus, TicketPriority } from "@/schemas/tickets";
 import { formatDistanceToNow } from "date-fns";
+import { generateEmbedding } from "@/lib/openai";
 
 // Get all tickets for an agent
 export async function getAgentTickets(agentId: string, filters: TicketFilters): Promise<TicketWithComputed[]> {
@@ -305,4 +306,101 @@ export async function getAgentsForAssignment(): Promise<{ id: string; email: str
   }
 
   return agents || [];
+}
+
+export interface RelevantTicketContext {
+  ticketId: string;
+  title: string;
+  status: string;
+  priority: string;
+  messages: {
+    content: string;
+    createdAt: string;
+    role: string;
+  }[];
+}
+
+export async function getRelevantTicketContext(
+  organizationId: string,
+  query: string,
+  limit: number = 5
+): Promise<RelevantTicketContext[]> {
+  const supabase = await createClient();
+  
+  // Generate embedding for the query
+  const embedding = await generateEmbedding(query);
+  const embeddingStr = `[${embedding.join(',')}]`;
+
+  console.log('Searching for messages with query:', query);
+  
+  // Find relevant messages using vector similarity search
+  const { data: relevantMessages, error: messagesError } = await supabase
+    .rpc('match_messages_by_embedding', {
+      query_embedding: embeddingStr,
+      match_threshold: 0.5,
+      match_count: 10
+    });
+
+  if (messagesError) {
+    console.error('Error fetching relevant messages:', messagesError);
+    return [];
+  }
+
+  console.log('Found relevant messages:', relevantMessages);
+
+  if (!relevantMessages?.length) {
+    console.log('No relevant messages found');
+    return [];
+  }
+
+  // Get unique ticket IDs from the relevant messages
+  const ticketIds = Array.from(
+    new Set(
+      relevantMessages.map((m: { ticket_id: string }) => m.ticket_id)
+    )
+  );
+
+  console.log('Unique ticket IDs found:', ticketIds);
+
+  // Fetch full ticket details for the relevant tickets
+  const { data: tickets, error: ticketsError } = await supabase
+    .from('tickets')
+    .select(`
+      id,
+      title,
+      status,
+      priority_level,
+      messages!inner (
+        id,
+        content,
+        created_at,
+        user_id,
+        users!inner (
+          role
+        )
+      )
+    `)
+    .in('id', ticketIds)
+    .eq('organization_id', organizationId)
+    .is('deleted_at', null)
+    .limit(limit);
+
+  if (ticketsError) {
+    console.error('Error fetching tickets:', ticketsError);
+    return [];
+  }
+
+  console.log('Retrieved tickets:', tickets);
+
+  return (tickets || []).map(ticket => ({
+    ticketId: ticket.id,
+    title: ticket.title,
+    status: ticket.status || 'unknown',
+    priority: ticket.priority_level || 'unknown',
+    messages: ticket.messages.map(msg => ({
+      content: msg.content,
+      createdAt: msg.created_at,
+      role: msg.users?.role || 'unknown'
+    }))
+  }));
 } 

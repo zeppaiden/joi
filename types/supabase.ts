@@ -727,6 +727,36 @@ export type Database = {
             }
             Returns: unknown
           }
+      match_messages: {
+        Args: {
+          query_embedding: string
+          match_threshold: number
+          match_count: number
+          p_organization_id: string
+        }
+        Returns: {
+          id: string
+          content: string
+          ticket_id: string
+          ticket_title: string
+          created_at: string
+        }[]
+      }
+      match_messages_by_embedding: {
+        Args: {
+          query_embedding: string
+          match_threshold?: number
+          match_count?: number
+        }
+        Returns: {
+          id: string
+          content: string
+          ticket_id: string
+          created_at: string
+          user_id: string
+          similarity: number
+        }[]
+      }
       soft_delete_ticket: {
         Args: {
           p_ticket_id: string

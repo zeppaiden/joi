@@ -2,6 +2,7 @@ import { createClient } from "@/utils/supabase/server";
 import { createAdminChatChain, createCustomerChatChain } from "@/lib/langchain/chat";
 import { ChatInput, ChatResponse, Message } from "@/types/chat";
 import { NextResponse } from "next/server";
+import { getRelevantTicketContext, RelevantTicketContext } from "@/lib/supabase/tickets";
 
 export async function POST(request: Request) {
   try {
@@ -26,6 +27,24 @@ export async function POST(request: Request) {
 
     const isAdmin = userData?.role === 'admin';
 
+    // For admins, get relevant ticket context
+    let ticketContext: RelevantTicketContext[] = [];
+    if (isAdmin) {
+      // Get the admin's organization
+      const { data: orgMember } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (orgMember?.organization_id) {
+        ticketContext = await getRelevantTicketContext(
+          orgMember.organization_id,
+          input.message
+        );
+      }
+    }
+
     // Create appropriate chat chain based on user role
     const chain = isAdmin ? createAdminChatChain() : createCustomerChatChain();
 
@@ -33,6 +52,7 @@ export async function POST(request: Request) {
     const response = await chain.invoke({
       chatHistory: [], // Since we're keeping it ephemeral, we don't load history
       userInput: input.message,
+      ...(isAdmin && { ticketContext }),
     });
 
     const message: Message = {

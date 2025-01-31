@@ -34,6 +34,151 @@ export type Database = {
   }
   public: {
     Tables: {
+      attachments: {
+        Row: {
+          content_type: string
+          created_at: string
+          filename: string
+          id: string
+          message_id: string
+          size: number
+          storage_path: string
+          updated_at: string
+        }
+        Insert: {
+          content_type: string
+          created_at?: string
+          filename: string
+          id?: string
+          message_id: string
+          size: number
+          storage_path: string
+          updated_at?: string
+        }
+        Update: {
+          content_type?: string
+          created_at?: string
+          filename?: string
+          id?: string
+          message_id?: string
+          size?: number
+          storage_path?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_embeddings: {
+        Row: {
+          chunk_content: string
+          chunk_index: number
+          created_at: string
+          document_id: string
+          embedding: string | null
+          id: string
+          metadata: Json | null
+          updated_at: string
+        }
+        Insert: {
+          chunk_content: string
+          chunk_index: number
+          created_at?: string
+          document_id: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          chunk_content?: string
+          chunk_index?: number
+          created_at?: string
+          document_id?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_embeddings_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "documents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      documents: {
+        Row: {
+          category: Database["public"]["Enums"]["document_category"]
+          created_at: string | null
+          deleted_at: string | null
+          description: string
+          file_name: string
+          file_path: string
+          file_size: number
+          file_type: string
+          id: string
+          organization_id: string
+          title: string
+          updated_at: string | null
+          uploaded_by: string
+        }
+        Insert: {
+          category: Database["public"]["Enums"]["document_category"]
+          created_at?: string | null
+          deleted_at?: string | null
+          description: string
+          file_name: string
+          file_path: string
+          file_size: number
+          file_type: string
+          id?: string
+          organization_id: string
+          title: string
+          updated_at?: string | null
+          uploaded_by: string
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["document_category"]
+          created_at?: string | null
+          deleted_at?: string | null
+          description?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          file_type?: string
+          id?: string
+          organization_id?: string
+          title?: string
+          updated_at?: string | null
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       emails: {
         Row: {
           bcc: string | null
@@ -144,6 +289,7 @@ export type Database = {
           content: string
           created_at: string
           deleted_at: string | null
+          embedding: string | null
           id: string
           ticket_id: string
           updated_at: string
@@ -153,6 +299,7 @@ export type Database = {
           content: string
           created_at?: string
           deleted_at?: string | null
+          embedding?: string | null
           id?: string
           ticket_id: string
           updated_at?: string
@@ -162,6 +309,7 @@ export type Database = {
           content?: string
           created_at?: string
           deleted_at?: string | null
+          embedding?: string | null
           id?: string
           ticket_id?: string
           updated_at?: string
@@ -380,6 +528,7 @@ export type Database = {
           id: string
           organization_id: string | null
           priority_level: string | null
+          rating: number | null
           status: string | null
           title: string
           updated_at: string
@@ -394,6 +543,7 @@ export type Database = {
           id: string
           organization_id?: string | null
           priority_level?: string | null
+          rating?: number | null
           status?: string | null
           title: string
           updated_at?: string
@@ -408,6 +558,7 @@ export type Database = {
           id?: string
           organization_id?: string | null
           priority_level?: string | null
+          rating?: number | null
           status?: string | null
           title?: string
           updated_at?: string
@@ -445,27 +596,42 @@ export type Database = {
       }
       users: {
         Row: {
+          avatar_url: string | null
           created_at: string
           deleted_at: string | null
           email: string
+          first_name: string | null
           id: string
+          last_name: string | null
+          phone_number: string | null
           role: string
+          timezone: string | null
           updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           deleted_at?: string | null
           email: string
+          first_name?: string | null
           id?: string
+          last_name?: string | null
+          phone_number?: string | null
           role: string
+          timezone?: string | null
           updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           deleted_at?: string | null
           email?: string
+          first_name?: string | null
           id?: string
+          last_name?: string | null
+          phone_number?: string | null
           role?: string
+          timezone?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -475,6 +641,147 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      binary_quantize:
+        | {
+            Args: {
+              "": string
+            }
+            Returns: unknown
+          }
+        | {
+            Args: {
+              "": unknown
+            }
+            Returns: unknown
+          }
+      halfvec_avg: {
+        Args: {
+          "": number[]
+        }
+        Returns: unknown
+      }
+      halfvec_out: {
+        Args: {
+          "": unknown
+        }
+        Returns: unknown
+      }
+      halfvec_send: {
+        Args: {
+          "": unknown
+        }
+        Returns: string
+      }
+      halfvec_typmod_in: {
+        Args: {
+          "": unknown[]
+        }
+        Returns: number
+      }
+      hnsw_bit_support: {
+        Args: {
+          "": unknown
+        }
+        Returns: unknown
+      }
+      hnsw_halfvec_support: {
+        Args: {
+          "": unknown
+        }
+        Returns: unknown
+      }
+      hnsw_sparsevec_support: {
+        Args: {
+          "": unknown
+        }
+        Returns: unknown
+      }
+      hnswhandler: {
+        Args: {
+          "": unknown
+        }
+        Returns: unknown
+      }
+      ivfflat_bit_support: {
+        Args: {
+          "": unknown
+        }
+        Returns: unknown
+      }
+      ivfflat_halfvec_support: {
+        Args: {
+          "": unknown
+        }
+        Returns: unknown
+      }
+      ivfflathandler: {
+        Args: {
+          "": unknown
+        }
+        Returns: unknown
+      }
+      l2_norm:
+        | {
+            Args: {
+              "": unknown
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              "": unknown
+            }
+            Returns: number
+          }
+      l2_normalize:
+        | {
+            Args: {
+              "": string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              "": unknown
+            }
+            Returns: unknown
+          }
+        | {
+            Args: {
+              "": unknown
+            }
+            Returns: unknown
+          }
+      match_messages: {
+        Args: {
+          query_embedding: string
+          match_threshold: number
+          match_count: number
+          p_organization_id: string
+        }
+        Returns: {
+          id: string
+          content: string
+          ticket_id: string
+          ticket_title: string
+          created_at: string
+        }[]
+      }
+      match_messages_by_embedding: {
+        Args: {
+          query_embedding: string
+          match_threshold?: number
+          match_count?: number
+        }
+        Returns: {
+          id: string
+          content: string
+          ticket_id: string
+          created_at: string
+          user_id: string
+          similarity: number
+        }[]
+      }
       soft_delete_ticket: {
         Args: {
           p_ticket_id: string
@@ -482,9 +789,70 @@ export type Database = {
         }
         Returns: undefined
       }
+      sparsevec_out: {
+        Args: {
+          "": unknown
+        }
+        Returns: unknown
+      }
+      sparsevec_send: {
+        Args: {
+          "": unknown
+        }
+        Returns: string
+      }
+      sparsevec_typmod_in: {
+        Args: {
+          "": unknown[]
+        }
+        Returns: number
+      }
+      vector_avg: {
+        Args: {
+          "": number[]
+        }
+        Returns: string
+      }
+      vector_dims:
+        | {
+            Args: {
+              "": string
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              "": unknown
+            }
+            Returns: number
+          }
+      vector_norm: {
+        Args: {
+          "": string
+        }
+        Returns: number
+      }
+      vector_out: {
+        Args: {
+          "": string
+        }
+        Returns: unknown
+      }
+      vector_send: {
+        Args: {
+          "": string
+        }
+        Returns: string
+      }
+      vector_typmod_in: {
+        Args: {
+          "": unknown[]
+        }
+        Returns: number
+      }
     }
     Enums: {
-      [_ in never]: never
+      document_category: "manuals" | "how-to" | "faqs" | "other"
     }
     CompositeTypes: {
       [_ in never]: never

@@ -3,6 +3,7 @@ import { PromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { RunnableSequence } from "@langchain/core/runnables";
 import { Message } from "@/types/chat";
+import { RelevantTicketContext } from "@/lib/supabase/tickets";
 
 // Initialize the chat model
 export const chatModel = new ChatOpenAI({
@@ -36,6 +37,9 @@ Be efficient and precise in your responses.
 Previous messages for context:
 {chatHistory}
 
+Relevant tickets and their context:
+{ticketContext}
+
 User's message: {userInput}
 
 Remember:
@@ -43,6 +47,8 @@ Remember:
 - You can help with ticket assignments
 - Verify any critical changes before executing
 - Keep audit trail in mind for important changes
+- Use the ticket context to provide informed suggestions
+- Reference specific tickets by their ID when making suggestions
 `);
 
 // Create role-specific chat chains
@@ -63,10 +69,21 @@ export const createCustomerChatChain = () => {
 export const createAdminChatChain = () => {
   return RunnableSequence.from([
     {
-      chatHistory: (input: { chatHistory: Message[]; userInput: string }) => 
-        formatChatHistory(input.chatHistory),
-      userInput: (input: { chatHistory: Message[]; userInput: string }) => 
-        input.userInput,
+      chatHistory: (input: { 
+        chatHistory: Message[]; 
+        userInput: string;
+        ticketContext?: RelevantTicketContext[];
+      }) => formatChatHistory(input.chatHistory),
+      userInput: (input: { 
+        chatHistory: Message[]; 
+        userInput: string;
+        ticketContext?: RelevantTicketContext[];
+      }) => input.userInput,
+      ticketContext: (input: { 
+        chatHistory: Message[]; 
+        userInput: string;
+        ticketContext?: RelevantTicketContext[];
+      }) => formatTicketContext(input.ticketContext || []),
     },
     adminPrompt,
     chatModel,
@@ -79,4 +96,18 @@ const formatChatHistory = (messages: Message[]): string => {
   return messages
     .map((msg) => `${msg.role}: ${msg.content}`)
     .join("\n");
+};
+
+// Helper function to format ticket context
+const formatTicketContext = (tickets: RelevantTicketContext[]): string => {
+  if (tickets.length === 0) return "No relevant tickets found.";
+
+  return tickets.map(ticket => `
+Ticket ${ticket.ticketId}:
+- Title: ${ticket.title}
+- Status: ${ticket.status}
+- Priority: ${ticket.priority}
+- Recent Messages:
+${ticket.messages.map(msg => `  ${msg.role}: ${msg.content}`).join("\n")}
+`).join("\n");
 }; 

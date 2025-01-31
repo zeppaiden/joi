@@ -1,7 +1,6 @@
 "use client";
 
 import { memo } from "react";
-import { Bot, User } from "lucide-react";
 import { Message } from "@/types/chat";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
